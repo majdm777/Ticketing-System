@@ -45,7 +45,7 @@ model Venue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seats  VenueSeat[]
+  seats VenueSeat[]
   events Event[]
 }
 
@@ -74,7 +74,7 @@ model Event {
   slug        String      @unique
 
   eventSeats EventSeat[]
-  bookings   Booking[]
+  bookings Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -100,6 +100,8 @@ model EventSeat {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  
 
   @@unique([eventId, venueSeatId])
   @@index([status, expiresAt])
