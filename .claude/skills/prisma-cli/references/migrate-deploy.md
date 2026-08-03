@@ -70,20 +70,17 @@ CMD npx prisma migrate deploy && node dist/index.js
 ## Production Workflow
 
 1. **Development**: Create migrations locally
-
    ```bash
    prisma migrate dev --name add_feature
    ```
 
 2. **Commit**: Include migration files in version control
-
    ```bash
    git add prisma/migrations
    git commit -m "Add feature migration"
    ```
 
 3. **Deploy**: Apply in production
-
    ```bash
    prisma migrate deploy
    ```
@@ -94,21 +91,10 @@ CMD npx prisma migrate deploy && node dist/index.js
 
 If a migration fails, `migrate deploy` exits with error. The failed migration is marked as failed in `_prisma_migrations`.
 
-There are two recovery paths depending on whether the failed migration partially applied:
-
-1. **Partially applied** - Revert the partial changes manually, then mark the migration as rolled back:
-
-   ```bash
-   prisma migrate resolve --rolled-back <migration_name>
-   ```
-
-2. **Not applied** - Complete the migration manually, then mark it as applied:
-
-   ```bash
-   prisma migrate resolve --applied <migration_name>
-   ```
-
-After resolving, re-run `prisma migrate deploy`.
+To fix:
+1. Resolve the issue (fix SQL, database state, etc.)
+2. Mark as resolved: `prisma migrate resolve --applied <migration_name>`
+3. Re-run: `prisma migrate deploy`
 
 ### Check status first
 

@@ -52,7 +52,7 @@ Prisma 7 has no MongoDB connector. Do not apply any step in this guide to a proj
 - **MongoDB projects should stay on Prisma 6.x or migrate to Prisma Next** - do not migrate MongoDB apps to Prisma 7's SQL client path (see `prisma-mongodb-upgrade`)
 - **Node.js 20.19.0+** required
 - **TypeScript 5.4.0+** required
-- **Latest stable Prisma ORM version**: `7.9.1`
+- **Latest stable Prisma ORM version**: `7.6.0`
 
 ## Upgrade Steps Overview
 
@@ -103,7 +103,7 @@ npx prisma generate
 
 Detailed migration guides for each breaking change:
 
-```text
+```
 references/esm-support.md        - ESM and CommonJS configuration
 references/schema-changes.md     - Generator, output, imports, and generated entrypoints
 references/driver-adapters.md    - Required driver adapter setup

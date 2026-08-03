@@ -61,14 +61,14 @@ Top-level commands currently exposed:
 
 ## Programmatic usage (library API)
 
-You can also use `create-db` programmatically in Node.js/Bun instead of shelling out to the CLI. Requires Node.js 20.19.0+.
+You can also use `create-db` programmatically in Node.js/Bun instead of shelling out to the CLI.
 
 Install:
 
 ```bash
-npm install create-db@1
+npm install create-db
 # or
-bun add create-db@1
+bun add create-db
 ```
 
 Create a database:

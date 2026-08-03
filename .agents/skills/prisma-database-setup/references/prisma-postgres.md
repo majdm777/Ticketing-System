@@ -65,15 +65,12 @@ Use a driver adapter for Prisma Postgres in the standard SQL workflow.
 
 ### Recommended for standard Node.js apps
 
-1. Install adapter and driver (`dotenv` loads `.env` for the connection string):
-
+1. Install adapter and driver:
    ```bash
    npm install @prisma/adapter-pg pg
-   npm install dotenv
    ```
 
 2. Use the direct TCP connection string from Prisma Console:
-
    ```typescript
    import 'dotenv/config'
    import { PrismaClient } from '../generated/client'
@@ -86,8 +83,6 @@ Use a driver adapter for Prisma Postgres in the standard SQL workflow.
 `PrismaPg` also accepts the connection string directly:
 
 ```typescript
-import 'dotenv/config'
-
 const adapter = new PrismaPg(process.env.DATABASE_URL!)
 const prisma = new PrismaClient({ adapter })
 ```
@@ -95,7 +90,6 @@ const prisma = new PrismaClient({ adapter })
 For PostgreSQL prepared statement naming, pass adapter options as the second argument:
 
 ```typescript
-import 'dotenv/config'
 import { createHash } from 'node:crypto'
 
 const adapter = new PrismaPg(process.env.DATABASE_URL!, {
@@ -110,11 +104,9 @@ Use the Prisma Postgres serverless driver only when you need HTTP/WebSocket tran
 
 ```bash
 npm install @prisma/adapter-ppg @prisma/ppg
-npm install dotenv
 ```
 
 ```typescript
-import 'dotenv/config'
 import { PrismaClient } from '../generated/client'
 import { PrismaPostgresAdapter } from '@prisma/adapter-ppg'
 

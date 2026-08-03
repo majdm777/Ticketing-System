@@ -4,7 +4,7 @@ Management API endpoint details for database setup workflows.
 
 ## List regions
 
-```text
+```
 GET /v1/regions/postgres
 ```
 
@@ -35,7 +35,7 @@ Only use regions where `status` is `available`.
 
 ## Create project (with database)
 
-```text
+```
 POST /v1/projects
 ```
 
@@ -79,7 +79,7 @@ POST /v1/projects
       "status": "ready",
       "createdAt": "2025-06-15T10:30:00.000Z",
       "isDefault": true,
-      "defaultConnectionId": "default",
+      "defaultConnectionId": "con_ghi789",
       "connections": [
         {
           "id": "con_ghi789",
@@ -112,11 +112,11 @@ Key field to extract:
 
 The response also includes `pooled` and `accelerate` endpoints — ignore these for new projects. The direct connection string is all you need.
 
-If `data.database.status` is `provisioning`, poll `GET /v1/databases/{id}` with a bounded retry (e.g. up to 10 attempts over ~2 minutes) until `status` is `ready`, then fail if it never becomes ready.
+If `data.database.status` is `provisioning`, poll `GET /v1/databases/{id}` until `status` is `ready`.
 
 ## Get database
 
-```text
+```
 GET /v1/databases/{databaseId}
 ```
 
@@ -134,7 +134,7 @@ Use to check database status after creation or to retrieve database details.
     "status": "ready",
     "createdAt": "2025-06-15T10:30:00.000Z",
     "isDefault": true,
-    "defaultConnectionId": "default",
+    "defaultConnectionId": "con_ghi789",
     "connections": [],
     "project": {
       "id": "proj_clx7abc123",
@@ -151,7 +151,7 @@ Use to check database status after creation or to retrieve database details.
 
 ## Create connection
 
-```text
+```
 POST /v1/databases/{databaseId}/connections
 ```
 
@@ -200,7 +200,7 @@ Extract: `data.endpoints.direct.connectionString` → use as `DATABASE_URL`.
 
 ## Delete database
 
-```text
+```
 DELETE /v1/databases/{databaseId}
 ```
 
@@ -208,7 +208,7 @@ Permanently deletes a database and all its connections. Returns `204 No Content`
 
 ## List projects
 
-```text
+```
 GET /v1/projects
 ```
 
@@ -216,7 +216,7 @@ Returns all projects in the workspace. Supports cursor-based pagination (`?curso
 
 ## Delete project
 
-```text
+```
 DELETE /v1/projects/{projectId}
 ```
 

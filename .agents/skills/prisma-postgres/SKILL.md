@@ -129,7 +129,7 @@ Use `createManagementApiClient` for existing tokens, or `createManagementApiSdk`
 
 Detailed guidance lives in:
 
-```text
+```
 references/console-and-connections.md
 references/create-db-cli.md
 references/management-api.md

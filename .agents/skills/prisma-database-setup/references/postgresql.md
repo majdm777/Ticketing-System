@@ -47,7 +47,7 @@ DATABASE_URL="postgresql://user:password@localhost:5432/mydb?schema=public"
 
 ### Connection String Format
 
-```text
+```
 postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=SCHEMA
 ```
 
@@ -62,15 +62,12 @@ postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=SCHEMA
 
 Use a driver adapter for the standard SQL workflow.
 
-1. Install adapter and driver (`dotenv` loads `.env` for the connection string):
-
+1. Install adapter and driver:
    ```bash
    npm install @prisma/adapter-pg pg
-   npm install dotenv
    ```
 
 2. Instantiate Prisma Client with the adapter:
-
    ```typescript
    import 'dotenv/config'
    import { PrismaClient } from '../generated/client'

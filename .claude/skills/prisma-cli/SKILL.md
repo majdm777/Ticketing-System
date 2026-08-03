@@ -11,8 +11,6 @@ metadata:
 
 Reference for Prisma ORM CLI commands. This skill provides guidance on command usage, options, and best practices for current Prisma ORM releases.
 
-> **Note**: `metadata.version` (7.6.0) is the skill version, not a required Prisma CLI version. Commands documented here target recent Prisma ORM releases; where Prisma 7-only behavior differs from Prisma 6, it is noted in the relevant reference file.
-
 ## Boundary: Compute
 
 Do not use this skill for Prisma Compute app deployment. Use `prisma-compute` for `@prisma/cli app deploy`, `compute:deploy`, `create-prisma --deploy`, Compute apps, deployments, logs, domains, and framework deploy readiness.
@@ -156,7 +154,7 @@ prisma migrate deploy
 prisma migrate status
 
 # Compare schemas and generate diff
-prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script
+prisma migrate diff --from-config-datasource --to-schema schema.prisma --script
 ```
 
 ### Utility Commands
@@ -223,7 +221,7 @@ import 'dotenv/config'
 
 See individual rule files for detailed command documentation:
 
-```text
+```
 references/init.md           - Project initialization
 references/generate.md       - Client generation
 references/dev.md            - Local development database

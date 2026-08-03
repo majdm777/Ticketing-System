@@ -165,8 +165,6 @@ const adapter = new PrismaMssql({
 const prisma = new PrismaClient({ adapter })
 ```
 
-> `trustServerCertificate: true` disables certificate validation and is for **local development only** — never enable it in production.
-
 ## Connection Pool Configuration
 
 Driver adapters use the underlying driver's pool settings, which differ from v6 defaults.
@@ -206,8 +204,6 @@ const adapter = new PrismaPg({
   }
 })
 ```
-
-> Setting `rejectUnauthorized: false` disables TLS certificate validation and is for **local development only** — never use it in production.
 
 ### Proper SSL configuration
 

@@ -5,7 +5,7 @@ Prisma 7 changed how PrismaClient connects to databases. The CLI (`prisma db pus
 ## Required packages
 
 ```bash
-npm install @prisma/client@7 @prisma/adapter-pg@7 pg@8
+npm install @prisma/client @prisma/adapter-pg pg
 ```
 
 - `@prisma/adapter-pg` — the Prisma adapter for the `pg` PostgreSQL driver
@@ -34,8 +34,6 @@ const prisma = new PrismaClient({ adapter })
 
 4. **Pool lifecycle**: Call `await pool.end()` when shutting down (after `prisma.$disconnect()`).
 
-5. **Connection string**: `pg.Pool` needs the direct TCP connection string (`postgres://...`), not a `prisma+postgres://` URL — Prisma Postgres provisioning strings are not Postgres-standard and must not be passed to regular Postgres tooling.
-
 ## Usage in application code
 
 ```typescript
@@ -48,31 +46,29 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
-try {
-  // Create
-  const user = await prisma.user.create({
-    data: { email: 'alice@example.com', name: 'Alice' },
-  })
+// Create
+const user = await prisma.user.create({
+  data: { email: 'alice@example.com', name: 'Alice' },
+})
 
-  // Read with relations
-  const posts = await prisma.post.findMany({
-    where: { published: true },
-    include: { author: true },
-  })
+// Read with relations
+const posts = await prisma.post.findMany({
+  where: { published: true },
+  include: { author: true },
+})
 
-  // Update
-  await prisma.post.update({
-    where: { id: 1 },
-    data: { published: true },
-  })
+// Update
+await prisma.post.update({
+  where: { id: 1 },
+  data: { published: true },
+})
 
-  // Delete
-  await prisma.post.delete({ where: { id: 1 } })
-} finally {
-  // Cleanup
-  await prisma.$disconnect()
-  await pool.end()
-}
+// Delete
+await prisma.post.delete({ where: { id: 1 } })
+
+// Cleanup
+await prisma.$disconnect()
+await pool.end()
 ```
 
 ## Common mistakes

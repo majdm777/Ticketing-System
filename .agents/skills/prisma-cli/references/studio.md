@@ -113,19 +113,16 @@ Some recent builds also expose AI-assisted SQL authoring. Treat these as interac
 ## Common Workflow
 
 1. Run migrations:
-
    ```bash
    prisma migrate dev
    ```
 
 2. Seed data:
-
    ```bash
    prisma db seed
    ```
 
 3. Open Studio to verify:
-
    ```bash
    prisma studio
    ```

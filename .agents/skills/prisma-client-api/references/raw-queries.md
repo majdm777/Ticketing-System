@@ -183,11 +183,6 @@ const result = await prisma.$queryRaw<[{ count: bigint }]>`
 const count = Number(result[0].count)
 ```
 
-Raw query results can return BigInt values. Converting with `Number()`
-or `JSON.stringify` is unsafe: values above `Number.MAX_SAFE_INTEGER`
-lose precision, and `JSON.stringify` throws on BigInt. Prefer `String()`
-or explicit `typeof value === 'bigint'` handling.
-
 ### Date handling
 
 ```typescript

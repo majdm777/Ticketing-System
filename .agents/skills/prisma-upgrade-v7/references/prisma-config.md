@@ -190,10 +190,6 @@ prisma migrate dev --config ./config/prisma.config.ts
 import 'dotenv/config'
 import { defineConfig, env } from 'prisma/config'
 import path from 'path'
-import { fileURLToPath } from 'node:url'
-
-// ESM has no __dirname; derive it from the module URL
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   schema: path.join(__dirname, 'packages/database/prisma/schema.prisma'),

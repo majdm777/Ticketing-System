@@ -130,19 +130,16 @@ export default defineConfig({
 ## Workflow
 
 1. Start local database:
-
    ```bash
    prisma dev
    ```
 
 2. In another terminal, run migrations:
-
    ```bash
    prisma migrate dev
    ```
 
 3. Generate client:
-
    ```bash
    prisma generate
    ```

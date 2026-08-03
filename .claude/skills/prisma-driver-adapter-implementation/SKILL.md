@@ -13,7 +13,7 @@ This skill provides everything needed to implement a Prisma ORM v7 driver adapte
 
 ## Architecture Overview
 
-```text
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         PrismaClient                            │
 │                    (requires adapter factory)                   │
@@ -63,11 +63,9 @@ import type {
   SqlResultSet,
   Transaction,
   TransactionOptions,
-  ArgScalarType,
   ArgType,
   ConnectionInfo,
   MappedError,
-  ResultValue,
 } from "@prisma/driver-adapter-utils";
 import {
   ColumnTypeEnum,
@@ -185,17 +183,13 @@ interface SqlMigrationAwareDriverAdapterFactory {
 class MyQueryable<TClient> implements SqlQueryable {
   readonly provider = "postgres" as const; // or 'sqlite' | 'mysql' | 'sqlserver'
   readonly adapterName = "@my-org/adapter-mydb" as const;
-  // Capability flags must be explicitly declared on the adapter object, never assumed
-  readonly isSqlite: boolean; // true only for SQLite adapters
 
-  constructor(protected readonly client: TClient) {
-    this.isSqlite = this.provider === "sqlite";
-  }
+  constructor(protected readonly client: TClient) {}
 
   async queryRaw(query: SqlQuery): Promise<SqlResultSet> {
     try {
       const args = query.args.map((arg, i) =>
-        mapArg(arg, query.argTypes[i] ?? { scalarType: "unknown", arity: "scalar" }, this.isSqlite)
+        mapArg(arg, query.argTypes[i] ?? { scalarType: "unknown", arity: "scalar" })
       );
 
       // Execute query with your driver
@@ -217,7 +211,7 @@ class MyQueryable<TClient> implements SqlQueryable {
   async executeRaw(query: SqlQuery): Promise<number> {
     try {
       const args = query.args.map((arg, i) =>
-        mapArg(arg, query.argTypes[i] ?? { scalarType: "unknown", arity: "scalar" }, this.isSqlite)
+        mapArg(arg, query.argTypes[i] ?? { scalarType: "unknown", arity: "scalar" })
       );
       const result = await this.client.query(query.sql, args);
       return result.affectedRows ?? 0;
@@ -235,8 +229,6 @@ class MyQueryable<TClient> implements SqlQueryable {
 ### Step 2: Create the Transaction class
 
 **Critical**: `commit()` and `rollback()` are **lifecycle hooks only**. They must NOT issue SQL. Prisma sends `COMMIT`/`ROLLBACK` via `executeRaw` on the transaction object.
-
-**Critical**: a transaction must be pinned to a **single dedicated connection for its entire duration**. It must never multiplex across pooled connections. Reserve one connection when `startTransaction` is called, run every transaction query on that same connection, and release it in `commit()`/`rollback()`.
 
 ```typescript
 class MyTransaction extends MyQueryable<TClient> implements Transaction {
@@ -278,9 +270,7 @@ class MyAdapter extends MyQueryable<TClient> implements SqlDriverAdapter {
   }
 
   async executeScript(script: string): Promise<void> {
-    // Never split raw SQL on ';' — semicolons appear inside string literals and
-    // dollar-quoted bodies. Use the driver's native multi-statement execution
-    // (e.g. db.exec() in SQLite drivers) or a real statement parser instead.
+    // For SQLite: split on ';' and run each statement
     // For Postgres: use multi-statement execution
     try {
       // Implementation depends on driver capabilities
@@ -292,8 +282,6 @@ class MyAdapter extends MyQueryable<TClient> implements SqlDriverAdapter {
   async startTransaction(
     isolationLevel?: IsolationLevel,
   ): Promise<Transaction> {
-    // Reserve a dedicated connection now and keep it for the whole transaction
-    // duration; never multiplex transaction queries across pooled connections.
     // Validate isolation level for your database
     const validLevels = new Set<IsolationLevel>([
       "READ UNCOMMITTED",
@@ -354,7 +342,6 @@ export type MyAdapterConfig = {
 };
 
 export type MyAdapterOptions = {
-  // Must point at a separate, isolated database — never reuse the main database
   shadowDatabaseUrl?: string;
 };
 
@@ -372,19 +359,11 @@ export class MyAdapterFactory implements SqlMigrationAwareDriverAdapterFactory {
   }
 
   connectToShadowDb(): Promise<SqlDriverAdapter> {
-    if (!this.options?.shadowDatabaseUrl) {
-      throw new Error(
-        "connectToShadowDb requires shadowDatabaseUrl: the shadow database must be an isolated, separate database — never reuse the main database",
-      );
-    }
-    return Promise.resolve(new MyAdapter(openConnection(this.options.shadowDatabaseUrl)));
+    const url = this.options?.shadowDatabaseUrl ?? this.config.url;
+    return Promise.resolve(new MyAdapter(openConnection(url)));
   }
 }
 ```
-
-The shadow database must be an **isolated, separate database** from the target database.
-Never fall back to the main `url` in `connectToShadowDb` — running migrations against the
-main database risks destroying application data.
 
 ## Conversion Helpers
 
@@ -393,7 +372,7 @@ main database risks destroying application data.
 Convert Prisma argument values to driver-native types:
 
 ```typescript
-function mapArg(arg: unknown, argType: ArgType, isSqlite: boolean): unknown {
+function mapArg(arg: unknown, argType: ArgType): unknown {
   if (arg === null || arg === undefined) return null;
 
   // String → number for int columns
@@ -412,8 +391,8 @@ function mapArg(arg: unknown, argType: ArgType, isSqlite: boolean): unknown {
   if (typeof arg === "string" && argType.scalarType === "bytes")
     return Buffer.from(arg, "base64");
 
-  // Boolean → 0/1 for SQLite (isSqlite comes from the adapter's declared capability flag)
-  if (typeof arg === "boolean" && isSqlite)
+  // Boolean → 0/1 for SQLite
+  if (typeof arg === "boolean" && /* SQLite */)
     return arg ? 1 : 0;
 
   return arg;
@@ -536,14 +515,14 @@ function convertDriverError(error: unknown): MappedError {
 
 - Set `safeIntegers: true` when opening the database to get `bigint` for large integers
 - Only `SERIALIZABLE` isolation level is valid
-- `executeScript`: use the driver's native multi-statement execution (e.g. `db.exec()` in better-sqlite3) — never split on `;`, since semicolons appear inside string literals and dollar-quoted bodies
+- `executeScript`: split on `;` and run each statement individually
 - Boolean values: store as 0/1, return as boolean
 
 ### PostgreSQL
 
 - All standard isolation levels are valid
 - For connection pooling (PgBouncer), use `prepare: false`
-- Transactions require a dedicated connection (`reserve()` pattern) reserved for the whole transaction duration; do not multiplex transaction queries across pooled connections
+- Transactions require a dedicated connection (`reserve()` pattern)
 - `executeScript`: use multi-statement execution (`.simple()` in some drivers)
 - `int8` columns may return as string (already stringified by driver)
 - `numeric` columns return as string to preserve precision
@@ -649,10 +628,7 @@ Before considering the adapter complete:
 - [ ] `SqlDriverAdapter` implements `queryRaw`, `executeRaw`, `executeScript`, `startTransaction`, `dispose`
 - [ ] `Transaction` implements `queryRaw`, `executeRaw`, `commit`, `rollback` with `options: { usePhantomQuery: false }`
 - [ ] `commit()` and `rollback()` are lifecycle hooks only (no SQL issued)
-- [ ] Transaction pinned to a dedicated connection for its whole duration (never multiplexed across pooled connections)
 - [ ] `startTransaction` issues `BEGIN` (depth 1) or `SAVEPOINT sp_N` (nested)
-- [ ] Capability flags (e.g. `isSqlite`) declared explicitly on the adapter object
-- [ ] `connectToShadowDb` uses an isolated shadow database, never the main database
 - [ ] Argument mapping handles: string→int, string→bigint, string→float, base64→bytes
 - [ ] Row mapping handles: bigint→string, Date→ISO string, JSON→string
 - [ ] Column types correctly mapped to `ColumnTypeEnum`

@@ -90,16 +90,13 @@ const prisma = new PrismaClient({ adapter })
 
 Prisma Client must be installed and generated for any database.
 
-1. Install Prisma CLI and Prisma Client (plus `dotenv` for loading `.env` in Node):
-
+1. Install Prisma CLI and Prisma Client:
    ```bash
    npm install prisma --save-dev
    npm install @prisma/client
-   npm install dotenv
    ```
 
 1. Add a generator block (`prisma-client` requires an explicit output path):
-
    ```prisma
    generator client {
      provider = "prisma-client"
@@ -108,15 +105,12 @@ Prisma Client must be installed and generated for any database.
    ```
 
 1. Generate Prisma Client:
-
    ```bash
    npx prisma generate
    ```
 
 1. For SQL providers, instantiate Prisma Client with the database-specific driver adapter:
-
    ```typescript
-   import 'dotenv/config'
    import { PrismaClient } from '../generated/client'
    import { PrismaPg } from '@prisma/adapter-pg'
 
@@ -129,7 +123,6 @@ Prisma Client must be installed and generated for any database.
 ## Quick Reference
 
 ### PostgreSQL
-
 ```prisma
 datasource db {
   provider = "postgresql"
@@ -142,7 +135,6 @@ generator client {
 ```
 
 ### MySQL
-
 ```prisma
 datasource db {
   provider = "mysql"
@@ -155,7 +147,6 @@ generator client {
 ```
 
 ### SQLite
-
 ```prisma
 datasource db {
   provider = "sqlite"
@@ -168,7 +159,6 @@ generator client {
 ```
 
 ### MongoDB
-
 ```prisma
 datasource db {
   provider = "mongodb"
@@ -186,7 +176,7 @@ For MongoDB, stay on the latest Prisma 6.x line and keep the connection URL in `
 
 See individual rule files for detailed setup instructions:
 
-```text
+```
 references/postgresql.md
 references/mysql.md
 references/sqlite.md

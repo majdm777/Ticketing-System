@@ -101,35 +101,30 @@ datasource db {
 export default defineConfig({
   datasource: {
     url: env('DATABASE_URL'),
+    directUrl: env('DIRECT_URL'),
     shadowDatabaseUrl: env('SHADOW_DATABASE_URL'),
   },
 })
 ```
 
-There is no `directUrl` in Prisma v7. When a direct connection is required, set `url` to a direct (non-pooled) connection string instead.
-
 ## After Schema Changes
 
 1. Run `prisma generate`:
-
    ```bash
    npx prisma generate
    ```
 
 2. Update imports throughout your codebase:
-
    ```typescript
    import { PrismaClient } from '../generated/prisma/client'
    ```
 
 3. Update `.gitignore` if you manage this manually:
-
-   ```text
+   ```
    /generated/prisma
    ```
 
 4. Replace `Prisma.validator()` with TypeScript `satisfies` when using `prisma-client`:
-
    ```typescript
    import { Prisma } from '../generated/prisma/client'
 

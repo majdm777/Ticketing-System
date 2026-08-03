@@ -1,24 +1,22 @@
-# Event Ticketing Database Schema
-
-We will be doing the models, tables and everything in this order:
+we will be doing the models, tables and everything in this order:
 
 0. enums
 1. venue + venue_seat
 2. event + event_seat
 3. booking
 
-Each numbered step above is its own isolated migration:
+each numbered step above is its own isolated migration:
 
 - one migration per step (related models grouped as shown; enums are step 0)
 - each migration has its own seeder
 - each migration has its own test
 - each migration is its own PR
 
-Down are the tables with all the things — check them and make sure we work step by step as mentioned above to have a clear vision.
+down are the tables with all the things — check them and make sure we work step by step as mentioned above
+to have a clear vision.
 
 The tables:
 
-```prisma
 // ============================================================
 // ENUMS (migration 0 — defined before any model)
 // ============================================================
@@ -78,7 +76,7 @@ venueId String
 
 row String
 number String
-section String
+section String?
 
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
@@ -146,7 +144,6 @@ venueSeat VenueSeat @relation(fields: [venueSeatId], references: [id])
 booking Booking?
 
 @@unique([eventId, venueSeatId])
-@@unique([eventId, id]) // referenced by Booking's composite foreign key
 @@index([status, expiresAt]) // used by the expiry sweep job: "find all PENDING seats past expiresAt"
 
 @@map("event_seats")
@@ -160,7 +157,7 @@ model Booking {
 id String @id @default(cuid())
 
 eventId String
-eventSeatId String // unique per seat via @@unique([eventId, eventSeatId]) below
+eventSeatId String @unique // a seat can only ever have one booking pointing at it
 
 userName String
 userPhone String
@@ -184,11 +181,9 @@ createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 
 event Event @relation(fields: [eventId], references: [id])
-eventSeat EventSeat @relation(fields: [eventId, eventSeatId], references: [eventId, id])
+eventSeat EventSeat @relation(fields: [eventSeatId], references: [id])
 
-@@unique([eventId, eventSeatId]) // a seat can only ever have one booking pointing at it
 @@index([eventId, status]) // admin dashboard: "show all PENDING bookings for this event"
 
 @@map("bookings")
 }
-```

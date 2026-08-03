@@ -46,7 +46,7 @@ DATABASE_URL="file:./dev.db"
 
 ### Connection String Format
 
-```text
+```
 file:PATH
 ```
 
@@ -56,17 +56,13 @@ file:PATH
 
 Use a driver adapter for the standard SQL workflow.
 
-1. Install adapter and driver (`dotenv` loads `.env` for the connection string):
-
+1. Install adapter and driver:
    ```bash
    npm install @prisma/adapter-better-sqlite3 better-sqlite3
-   npm install dotenv
    ```
 
 2. Instantiate Prisma Client with the adapter:
-
    ```typescript
-   import 'dotenv/config'
    import { PrismaClient } from '../generated/client'
    import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 
@@ -81,17 +77,13 @@ Use a driver adapter for the standard SQL workflow.
 
 For edge compatibility or Turso:
 
-1. Install (`dotenv` loads `.env` for the connection details):
-
+1. Install:
    ```bash
    npm install @prisma/adapter-libsql @libsql/client
-   npm install dotenv
    ```
 
 2. Instantiate:
-
    ```typescript
-   import 'dotenv/config'
    import { PrismaClient } from '../generated/client'
    import { PrismaLibSql } from '@prisma/adapter-libsql'
 

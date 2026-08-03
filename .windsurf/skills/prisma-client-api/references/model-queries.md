@@ -136,10 +136,6 @@ const users = await prisma.user.createManyAndReturn({
 // Returns array of created users
 ```
 
-Only supported on PostgreSQL, CockroachDB, and SQLite. The returned
-order is NOT guaranteed, so look up created rows by a unique field
-instead of relying on array position.
-
 ## Update Operations
 
 ### update
@@ -278,7 +274,6 @@ const groups = await prisma.user.groupBy({
 | `createManyAndReturn` | Record[] |
 | `update` | Record |
 | `updateMany` | { count: number } |
-| `updateManyAndReturn` | Record[] |
 | `delete` | Record |
 | `deleteMany` | { count: number } |
 | `count` | number |
