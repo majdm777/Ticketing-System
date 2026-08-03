@@ -45,7 +45,7 @@ model Venue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seats VenueSeat[]
+  seats  VenueSeat[]
   events Event[]
 }
 
@@ -56,11 +56,12 @@ model VenueSeat {
 
   row     String
   number  String
-  section String?
+  section String
 
   eventSeats EventSeat[]
 
   @@unique([venueId, row, number, section])
+  @@unique([id, venueId])
 }
 
 model Event {
@@ -74,19 +75,22 @@ model Event {
   slug        String      @unique
 
   eventSeats EventSeat[]
-  bookings Booking[]
+  bookings   Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([id, venueId])
 }
 
 model EventSeat {
-  id      String @id @default(cuid())
-  eventId String
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
+  id          String @id @default(cuid())
+  eventId     String
   venueSeatId String
-  venueSeat   VenueSeat @relation(fields: [venueSeatId], references: [id])
+  venueId     String
+
+  event     Event     @relation(fields: [eventId, venueId], references: [id, venueId], onDelete: Cascade)
+  venueSeat VenueSeat @relation(fields: [venueSeatId, venueId], references: [id, venueId])
 
   status SeatStatus @default(AVAILABLE)
 
@@ -96,14 +100,13 @@ model EventSeat {
   pendingSince  DateTime?
   expiresAt     DateTime?
 
-  booking Booking?
+  bookings Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  
-
   @@unique([eventId, venueSeatId])
+  @@unique([eventId, id])
   @@index([status, expiresAt])
 }
 
@@ -112,8 +115,8 @@ model Booking {
   eventId String
   event   Event  @relation(fields: [eventId], references: [id])
 
-  eventSeatId String    @unique
-  eventSeat   EventSeat @relation(fields: [eventSeatId], references: [id])
+  eventSeatId String
+  eventSeat   EventSeat @relation(fields: [eventId, eventSeatId], references: [eventId, id])
 
   userName  String
   userPhone String

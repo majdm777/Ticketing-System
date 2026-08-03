@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# local AI assistant skills (kept locally, not committed)
+/.agents/
+/.claude/
+/.windsurf/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
