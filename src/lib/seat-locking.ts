@@ -120,10 +120,12 @@ export async function confirmOnlineCodeBooking(params: {
       throw new Error('Booking was already processed');
     }
 
+    const now = new Date();
     const seatResult = await tx.eventSeat.updateMany({
       where: {
         id: booking.eventSeatId,
         status: SeatStatus.PENDING,
+        expiresAt: { gt: now },
       },
       data: {
         status: SeatStatus.BOOKED,
