@@ -1,0 +1,49 @@
+# CodeRabbit configuration
+# https://docs.coderabbit.ai/reference/configuration
+
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_instructions:
+    - path: "prisma/schema.prisma"
+      instructions: >
+        This is the Prisma schema for an event-ticketing app. Pay close
+        attention to relations, unique constraints, and indexes — especially
+        anything touching seat locking or booking state (EventSeat, Booking).
+        Flag any change that could weaken a uniqueness guarantee (e.g.
+        removing @unique from eventSeatId) or remove an index used by the
+        expiry sweep job (status + expiresAt).
+
+    - path: "src/lib/seat-locking.ts"
+      instructions: >
+        This file implements atomic seat locking using conditional
+        `updateMany` calls guarded on current status (e.g. WHERE status =
+        'AVAILABLE'), to avoid race conditions between simultaneous seat
+        requests. Flag any change that reintroduces a read-then-write
+        pattern (a `findUnique`/`findFirst` followed by a separate `update`)
+        where a single guarded `updateMany` should be used instead — that's
+        the specific bug class this file exists to prevent.
+
+    - path: "src/app/api/**"
+      instructions: >
+        Next.js API routes. Check that: (1) any route that mutates booking
+        or seat state validates input with Zod before touching the
+        database, (2) errors are caught and returned as sensible HTTP status
+        codes rather than leaking raw error objects/stack traces to the
+        client, (3) admin-only routes actually check for an authenticated
+        admin session before performing the action.
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  tools:
+    prismaLint:
+      enabled: true
