@@ -38,6 +38,12 @@ function token() {
 }
 
 async function main() {
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    throw new Error(
+      'Refusing to wipe the database. Set ALLOW_DESTRUCTIVE_SEED=true to run the destructive seed.',
+    )
+  }
+
   await prisma.booking.deleteMany()
   await prisma.eventSeat.deleteMany()
   await prisma.event.deleteMany()
@@ -108,8 +114,11 @@ async function main() {
     })
   }
 
-  const jazz = events[0]
-  const showcase = events[2]
+  const jazz = events.find((event) => event.slug === 'jazz-under-the-stars')
+  const showcase = events.find((event) => event.slug === 'indie-rock-showcase')
+  if (!jazz || !showcase) {
+    throw new Error('Expected seed events were not created.')
+  }
 
   const jazzSeats = await prisma.eventSeat.findMany({
     where: { eventId: jazz.id },
@@ -142,6 +151,7 @@ async function main() {
   }
 
   const pendingSeat = jazzSeats[2]
+  const pendingExpiresAt = new Date(Date.now() + 3_600_000)
   await prisma.eventSeat.update({
     where: { id: pendingSeat.id },
     data: {
@@ -149,7 +159,7 @@ async function main() {
       bookedByName: 'Bob Miller',
       bookedByPhone: '+15550987654',
       pendingSince: new Date(),
-      expiresAt: future(0, new Date().getHours() + 1),
+      expiresAt: pendingExpiresAt,
     },
   })
   await prisma.booking.create({
@@ -161,23 +171,12 @@ async function main() {
       caseType: CaseType.PAY_AT_DOOR,
       status: BookingStatus.PENDING,
       referenceCode: ref('TKT'),
-      expiresAt: future(0, new Date().getHours() + 1),
+      expiresAt: pendingExpiresAt,
     },
   })
 
   const cancelledSeat = jazzSeats[9]
-  await prisma.eventSeat.update({
-    where: { id: cancelledSeat.id },
-    data: {
-      status: SeatStatus.AVAILABLE,
-      bookedByName: null,
-      bookedByPhone: null,
-      referenceCode: null,
-      pendingSince: null,
-      expiresAt: null,
-    },
-  })
-  await prisma.booking.create({
+  const cancelledBooking = await prisma.booking.create({
     data: {
       eventId: jazz.id,
       eventSeatId: cancelledSeat.id,
@@ -187,6 +186,18 @@ async function main() {
       status: BookingStatus.CANCELLED,
       referenceCode: ref('TKT'),
       cancelledAt: new Date(),
+    },
+  })
+  await prisma.booking.delete({ where: { id: cancelledBooking.id } })
+  await prisma.eventSeat.update({
+    where: { id: cancelledSeat.id },
+    data: {
+      status: SeatStatus.AVAILABLE,
+      bookedByName: null,
+      bookedByPhone: null,
+      referenceCode: null,
+      pendingSince: null,
+      expiresAt: null,
     },
   })
 

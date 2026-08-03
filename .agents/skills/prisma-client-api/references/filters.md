@@ -65,6 +65,9 @@ where: {
 }
 ```
 
+`mode: 'insensitive'` is only supported on PostgreSQL and MongoDB.
+Other providers (for example MySQL and SQLite) do not support it.
+
 ## Null Checks
 
 ```typescript
@@ -77,6 +80,8 @@ where: { deletedAt: { not: null } }
 // Using isSet (for optional fields)
 where: { middleName: { isSet: true } }
 ```
+
+`isSet` and `isNotSet` filters are MongoDB-only.
 
 ## Logical Operators
 
@@ -201,7 +206,7 @@ where: {
 // Users without profile
 where: {
   profile: {
-    isNot: null
+    is: null
   }
 }
 ```
@@ -222,7 +227,13 @@ where: { tags: { hasEvery: ['typescript', 'prisma'] } }
 
 // Is empty
 where: { tags: { isEmpty: true } }
+
+// Is not empty
+where: { tags: { isNotEmpty: true } }
 ```
+
+Array filters `has`, `hasEvery`, `hasSome`, `isEmpty`, and `isNotEmpty`
+are only supported on PostgreSQL, CockroachDB, and MongoDB.
 
 ## JSON Filters
 

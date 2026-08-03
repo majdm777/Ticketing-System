@@ -41,25 +41,33 @@ const prisma = new PrismaClient({ adapter }).$extends({
 #### Soft delete
 
 ```typescript
-const prisma = new PrismaClient({ adapter }).$extends({
-  query: {
-    user: {
-      async delete({ args, query }) {
-        // Convert delete to soft delete
-        return prisma.user.update({
-          where: args.where,
-          data: { deletedAt: new Date() },
-        })
-      },
-      async findMany({ args, query }) {
-        // Filter out soft-deleted records
-        args.where = { ...args.where, deletedAt: null }
-        return query(args)
+import { Prisma } from '../generated/prisma/client'
+
+const softDelete = Prisma.defineExtension((client) =>
+  client.$extends({
+    query: {
+      user: {
+        async delete({ args }) {
+          // Convert delete to soft delete
+          return client.user.update({
+            where: args.where,
+            data: { deletedAt: new Date() },
+          })
+        },
+        async findMany({ args, query }) {
+          // Filter out soft-deleted records
+          args.where = { ...args.where, deletedAt: null }
+          return query(args)
+        },
       },
     },
-  },
-})
+  }),
+)
+
+const prisma = new PrismaClient({ adapter }).$extends(softDelete)
 ```
+
+Referencing `client` (the base client passed into `defineExtension`) avoids recursive hooks on the extended client.
 
 #### Logging
 
@@ -68,13 +76,15 @@ const prisma = new PrismaClient({ adapter }).$extends({
   query: {
     $allModels: {
       async $allOperations({ operation, model, args, query }) {
-        console.log(`${model}.${operation}`, JSON.stringify(args))
+        console.log(`${model}.${operation}`)
         return query(args)
       },
     },
   },
 })
 ```
+
+Avoid `JSON.stringify(args)` in logging: `args` can contain BigInt, `Buffer`, or binary values that stringify throws on or leaks.
 
 ## Metrics
 

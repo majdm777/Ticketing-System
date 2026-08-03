@@ -73,6 +73,7 @@ export default defineConfig({
 ### Starting from existing database
 
 1. Initialize Prisma:
+
    ```bash
    prisma init
    ```
@@ -80,6 +81,7 @@ export default defineConfig({
 2. Configure database URL
 
 3. Pull schema:
+
    ```bash
    prisma db pull
    ```
@@ -87,6 +89,7 @@ export default defineConfig({
 4. Review and customize generated schema
 
 5. Generate client:
+
    ```bash
    prisma generate
    ```
@@ -142,6 +145,7 @@ model posts {
 After `db pull`, consider:
 
 1. **Rename models** to PascalCase:
+
    ```prisma
    model User {  // Was: users
      @@map("users")
@@ -149,16 +153,19 @@ After `db pull`, consider:
    ```
 
 2. **Rename fields** to camelCase:
+
    ```prisma
    authorId Int? @map("author_id")
    ```
 
 3. **Add relation names** for clarity:
+
    ```prisma
    author User? @relation("PostAuthor", fields: [authorId], references: [id])
    ```
 
 4. **Add documentation**:
+
    ```prisma
    /// User account information
    model User {

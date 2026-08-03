@@ -123,7 +123,7 @@ prisma db seed
 
 If `db push` can't apply changes safely:
 
-```
+```text
 Error: The following changes cannot be applied:
   - Removing field `email` would cause data loss
   

@@ -27,7 +27,7 @@ Outputs details about your Prisma environment, including:
 
 ## Example Output
 
-```
+```text
 prisma               : 7.3.0
 @prisma/client       : 7.3.0
 Operating System     : darwin

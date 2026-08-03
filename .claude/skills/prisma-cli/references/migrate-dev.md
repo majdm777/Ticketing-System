@@ -69,7 +69,7 @@ prisma db seed
 
 Created in `prisma/migrations/`:
 
-```
+```text
 prisma/migrations/
 ├── 20240115120000_add_users_table/
 │   └── migration.sql
@@ -82,7 +82,7 @@ prisma/migrations/
 
 If `migrate dev` detects drift (manual database changes or edited migrations), it prompts to reset:
 
-```
+```text
 Drift detected: Your database schema is not in sync.
 
 Do you want to reset your database? All data will be lost.

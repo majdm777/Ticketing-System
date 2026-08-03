@@ -28,7 +28,7 @@ Do **not** use this skill when:
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20.19.0+ (required by the create-db / Management API tooling)
 - A Prisma Postgres workspace (create one at https://console.prisma.io if needed)
 - A workspace service token (see `references/auth.md`)
 
@@ -101,7 +101,7 @@ The response is wrapped in `{ "data": { ... } }`. Extract:
 
 Use the **direct** connection string (`endpoints.direct.connectionString`). Do not use the pooled or accelerate endpoints — those are for legacy Accelerate setups and not needed for new projects.
 
-If the response status is `provisioning`, wait a few seconds and poll `GET /v1/databases/<database-id>` until `status` is `ready`.
+If the response status is `provisioning`, wait a few seconds and poll `GET /v1/databases/<database-id>` with a bounded retry (e.g. up to 10 attempts over ~2 minutes) until `status` is `ready`, then fail if it never becomes ready.
 
 **If creation fails due to a database limit**, list the user's existing projects and present them as an interactive menu for deletion. After the user picks one, delete it and retry.
 
@@ -125,7 +125,7 @@ Extract the direct connection string from `data.endpoints.direct.connectionStrin
 1. Install dependencies:
 
 ```bash
-npm install prisma @prisma/client @prisma/adapter-pg pg dotenv
+npm install prisma@7 @prisma/client@7 @prisma/adapter-pg@7 pg@8 dotenv@17
 ```
 
 All five packages are required:
@@ -137,7 +137,7 @@ All five packages are required:
 
 2. Write the direct connection string to `.env`. **Append** to the file if it already exists — do not overwrite existing entries:
 
-```
+```env
 DATABASE_URL="<direct-connection-string>"
 ```
 
@@ -158,15 +158,15 @@ datasource db {
 7. Ensure `prisma.config.ts` loads the connection URL from the environment:
 
 ```typescript
-import path from 'node:path'
-import { defineConfig } from 'prisma/config'
 import 'dotenv/config'
+import path from 'node:path'
+import { defineConfig, env } from 'prisma/config'
 
 export default defineConfig({
   earlyAccess: true,
   schema: path.join(import.meta.dirname, 'prisma', 'schema.prisma'),
   datasource: {
-    url: process.env.DATABASE_URL!,
+    url: env('DATABASE_URL'),
   },
 })
 ```
@@ -175,6 +175,8 @@ export default defineConfig({
 - Connection URLs go in `prisma.config.ts`, never in `schema.prisma`
 - The provider in `schema.prisma` must be `"postgresql"` (not `"prismaPostgres"`)
 - `dotenv/config` must be imported in `prisma.config.ts` to load `.env` variables
+- Use `env('DATABASE_URL')` from `prisma/config` (not `process.env`) for connection URLs
+- Prisma Postgres connection strings (e.g. `prisma+postgres://...` from provisioning) are **not** Postgres-standard `postgresql://` URLs; do not pass them to regular Postgres tooling (`psql`, `pg_dump`) or the plain `pg` driver — use the direct TCP string (`endpoints.direct.connectionString`, a `postgres://...` URL) for those tools
 
 ### Step 6: Define schema and push
 
@@ -188,9 +190,10 @@ Once the schema has models and the user is ready, create a migration and generat
 
 ```bash
 npx prisma migrate dev --name init
+npx prisma generate
 ```
 
-This creates migration files in `prisma/migrations/` **and** generates the client in one step. Migration history is essential for CI/CD workflows (`prisma migrate deploy`) and production deployments.
+This creates migration files in `prisma/migrations/`. In Prisma 7, `migrate dev` does **not** auto-generate the client, so run `npx prisma generate` explicitly afterward. Migration history is essential for CI/CD workflows (`prisma migrate deploy`) and production deployments.
 
 Only use `npx prisma db push` if the user explicitly asks for prototyping-only mode (no migration history). In that case, follow it with `npx prisma generate`.
 
@@ -210,11 +213,13 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
-const result = await prisma.$queryRawUnsafe('SELECT 1 as connected')
-console.log('Connected to Prisma Postgres:', result)
-
-await prisma.$disconnect()
-await pool.end()
+try {
+  const result = await prisma.$queryRawUnsafe('SELECT 1 as connected')
+  console.log('Connected to Prisma Postgres:', result)
+} finally {
+  await prisma.$disconnect()
+  await pool.end()
+}
 ```
 
 Run it:
@@ -255,7 +260,7 @@ Read `references/api-basics.md` for the full error reference. Key self-correctio
 
 Detailed API and usage information is in:
 
-```
+```text
 references/auth.md             — Service token creation and usage
 references/api-basics.md       — Base URL, envelope, IDs, errors, pagination
 references/endpoints.md        — Endpoint details for projects, databases, connections, regions

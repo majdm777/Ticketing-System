@@ -31,6 +31,19 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter })
 ```
 
+Driver adapters such as `PrismaPg` accept a pool configuration
+(`PoolConfig`) passed as options. Use it to tune the underlying
+connection pool:
+
+```typescript
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,                        // max connections in the pool
+  connectionTimeoutMillis: 5000,  // wait for a connection (ms)
+  idleTimeoutMillis: 30000        // connection idle lifetime (ms)
+})
+```
+
 ### accelerateUrl (For Accelerate users)
 
 ```typescript
@@ -128,6 +141,11 @@ const prisma = new PrismaClient({
 ```
 
 ## Singleton Pattern
+
+PrismaClient is a singleton scoped to one database. Instantiate it once
+and reuse the same instance throughout the process; do not create a new
+client per HTTP request. Each instance manages its own connection pool,
+so repeated instantiation leaks connections and exhausts the database.
 
 Prevent multiple client instances in development:
 

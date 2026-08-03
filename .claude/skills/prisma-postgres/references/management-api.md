@@ -61,6 +61,7 @@ Workspace -> Project -> Branch -> Database. Branches are a first-class resource:
 
 - Management API responses may include direct connection credentials for databases.
 - Build PostgreSQL `DATABASE_URL` from direct connection values when needed.
+- Prisma Postgres connection strings (e.g. `prisma+postgres://...` from the create flow) are **not** Postgres-standard `postgresql://` URLs; do not pass them to regular Postgres tooling (`psql`, `pg_dump`) or the plain `pg` driver — use the direct TCP string (`endpoints.direct.connectionString`, a `postgres://...` URL) for those tools.
 
 ## References
 

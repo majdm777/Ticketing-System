@@ -7,6 +7,7 @@ Generate and instantiate Prisma Client for Prisma's standard SQL provider workfl
 ```bash
 npm install prisma --save-dev
 npm install @prisma/client
+npm install dotenv
 ```
 
 ## 2. Add generator block
@@ -33,6 +34,7 @@ Re-run `prisma generate` after every schema change to keep the client in sync.
 ## 4. Instantiate Prisma Client
 
 ```typescript
+import 'dotenv/config'
 import { PrismaClient } from '../generated/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 

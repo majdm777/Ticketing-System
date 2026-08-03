@@ -4,7 +4,7 @@ Core conventions for the Prisma Management API. All three `prisma-postgres-*` sk
 
 ## Base URL
 
-```
+```text
 https://api.prisma.io/v1
 ```
 
@@ -57,7 +57,7 @@ Always include the prefix when sending IDs in API requests.
 
 Collection endpoints use cursor-based pagination:
 
-```
+```text
 GET /v1/projects?limit=10
 GET /v1/projects?cursor=clx7abc123&limit=10
 ```

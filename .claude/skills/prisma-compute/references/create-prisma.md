@@ -114,4 +114,6 @@ All Prisma 7 scaffolds:
 
 ## Failure Handling
 
+For non-interactive `--deploy`, authenticate first with `PRISMA_SERVICE_TOKEN` (or a stored OAuth workspace; see the auth section of [`app-deploy-cli.md`](app-deploy-cli.md)); never pass the token on the command line.
+
 If `--deploy` is explicit and setup cannot authenticate, cannot run the Platform CLI, or cannot complete the integrated deploy, report that deploy failed and keep the scaffolded project. Do not delete the user's files.

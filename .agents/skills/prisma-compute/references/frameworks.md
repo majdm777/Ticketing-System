@@ -133,7 +133,7 @@ Example runtime shape:
 const rawPort = (process.env.PORT ?? "").trim()
 const parsedPort = rawPort.length > 0 ? Number(rawPort) : Number.NaN
 const port = Number.isInteger(parsedPort) ? parsedPort : 8080
-serve({ fetch: app.fetch, port })
+serve({ fetch: app.fetch, port, hostname: "0.0.0.0" })
 ```
 
 ## NestJS

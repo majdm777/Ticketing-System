@@ -74,9 +74,12 @@ const prisma = new PrismaClient({
   log: [{ level: 'query', emit: 'event' }]
 })
 
+// e.params can contain PII or secrets — only log it in development
 prisma.$on('query', (e) => {
   console.log('Query:', e.query)
-  console.log('Params:', e.params)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Params:', e.params)
+  }
   console.log('Duration:', e.duration, 'ms')
 })
 ```
@@ -162,7 +165,7 @@ const prisma = new PrismaClient({ adapter }).$extends({
   }
 })
 
-const user = await prisma.user.findFirst()
+const user = await prisma.user.findFirstOrThrow()
 console.log(user.fullName) // Computed field
 ```
 

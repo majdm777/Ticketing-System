@@ -47,7 +47,7 @@ DATABASE_URL="mysql://user:password@localhost:3306/mydb"
 
 ### Connection String Format
 
-```
+```text
 mysql://USER:PASSWORD@HOST:PORT/DATABASE
 ```
 
@@ -61,12 +61,15 @@ mysql://USER:PASSWORD@HOST:PORT/DATABASE
 
 Use a driver adapter for the standard SQL workflow.
 
-1. Install adapter and driver:
+1. Install adapter and driver (`dotenv` loads `.env` for the connection details):
+
    ```bash
    npm install @prisma/adapter-mariadb mariadb
+   npm install dotenv
    ```
 
 2. Instantiate Prisma Client with the adapter:
+
    ```typescript
    import 'dotenv/config'
    import { PrismaClient } from '../generated/client'
@@ -89,6 +92,7 @@ Use a driver adapter for the standard SQL workflow.
 If you need the MariaDB driver's text protocol instead of the default binary `execute()` path, enable `useTextProtocol` explicitly:
 
 ```typescript
+import 'dotenv/config'
 import { PrismaClient } from '../generated/client'
 import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 
@@ -118,6 +122,7 @@ datasource db {
 
 ### "Too many connections"
 MySQL has a connection limit. Adjust connection pool size in URL:
+
 ```env
 DATABASE_URL="mysql://...?connection_limit=5"
 ```

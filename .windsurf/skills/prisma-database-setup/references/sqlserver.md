@@ -47,7 +47,7 @@ DATABASE_URL="sqlserver://localhost:1433;database=mydb;user=sa;password=Password
 
 ### Connection String Format
 
-```
+```text
 sqlserver://HOST:PORT;database=DB;user=USER;password=PASS;encrypt=true;trustServerCertificate=true
 ```
 
@@ -58,12 +58,15 @@ sqlserver://HOST:PORT;database=DB;user=USER;password=PASS;encrypt=true;trustServ
 
 Use a driver adapter for the standard SQL workflow.
 
-1. Install adapter and driver:
+1. Install adapter and driver (`dotenv` loads `.env` for the connection details):
+
    ```bash
    npm install @prisma/adapter-mssql mssql
+   npm install dotenv
    ```
 
 2. Instantiate Prisma Client with the adapter:
+
    ```typescript
    import 'dotenv/config'
    import { PrismaClient } from '../generated/client'
