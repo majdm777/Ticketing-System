@@ -10,7 +10,8 @@ export class SeatUnavailableError extends Error {
 }
 
 function getOnlineExpiryHours(): number {
-  return Number(process.env.PENDING_ONLINE_EXPIRY_HOURS ?? 3);
+  const parsed = Number(process.env.PENDING_ONLINE_EXPIRY_HOURS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
 }
 
 export async function requestSeatOnlineCode(params: {
@@ -42,7 +43,24 @@ export async function requestSeatOnlineCode(params: {
       throw new SeatUnavailableError();
     }
 
-    const referenceCode = generateReferenceCode();
+    // Reference codes are unique across ALL bookings ever made (not just
+    // active ones), so we check against everything — a collision with an
+    // old expired booking's code would still fail the unique constraint.
+    let referenceCode = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = generateReferenceCode();
+      const clash = await tx.booking.findFirst({
+        where: { referenceCode: candidate },
+        select: { id: true },
+      });
+      if (!clash) {
+        referenceCode = candidate;
+        break;
+      }
+    }
+    if (!referenceCode) {
+      throw new Error('Could not generate a unique reference code, please retry');
+    }
 
     await tx.eventSeat.update({
       where: { id: eventSeatId },
@@ -102,14 +120,21 @@ export async function confirmOnlineCodeBooking(params: {
       throw new Error('Booking was already processed');
     }
 
-    await tx.eventSeat.update({
-      where: { id: booking.eventSeatId },
+    const seatResult = await tx.eventSeat.updateMany({
+      where: {
+        id: booking.eventSeatId,
+        status: SeatStatus.PENDING,
+      },
       data: {
         status: SeatStatus.BOOKED,
         expiresAt: null,
         pendingSince: null,
       },
     });
+
+    if (seatResult.count === 0) {
+      throw new SeatUnavailableError();
+    }
 
     return tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
   });
