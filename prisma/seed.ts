@@ -110,6 +110,7 @@ async function main() {
       data: venue.seats.map((s) => ({
         eventId: event.id,
         venueSeatId: s.id,
+        venueId: venue.id,
       })),
     })
   }
@@ -176,7 +177,7 @@ async function main() {
   })
 
   const cancelledSeat = jazzSeats[9]
-  const cancelledBooking = await prisma.booking.create({
+  await prisma.booking.create({
     data: {
       eventId: jazz.id,
       eventSeatId: cancelledSeat.id,
@@ -188,7 +189,6 @@ async function main() {
       cancelledAt: new Date(),
     },
   })
-  await prisma.booking.delete({ where: { id: cancelledBooking.id } })
   await prisma.eventSeat.update({
     where: { id: cancelledSeat.id },
     data: {
@@ -198,6 +198,25 @@ async function main() {
       referenceCode: null,
       pendingSince: null,
       expiresAt: null,
+    },
+  })
+  await prisma.eventSeat.update({
+    where: { id: cancelledSeat.id },
+    data: { status: SeatStatus.BOOKED },
+  })
+  await prisma.booking.create({
+    data: {
+      eventId: jazz.id,
+      eventSeatId: cancelledSeat.id,
+      userName: 'David Kim',
+      userPhone: '+15552223344',
+      caseType: CaseType.PAY_AT_DOOR,
+      status: BookingStatus.CONFIRMED,
+      referenceCode: ref('TKT'),
+      confirmedByAdmin: 'admin@example.com',
+      confirmedAt: new Date(),
+      ticketToken: token(),
+      ticketSentAt: new Date(),
     },
   })
 

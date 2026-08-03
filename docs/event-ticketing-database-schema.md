@@ -61,8 +61,6 @@ updatedAt DateTime @updatedAt
 
 seats VenueSeat[]
 events Event[]
-
-@@map("venues")
 }
 
 // ============================================================
@@ -76,7 +74,7 @@ venueId String
 
 row String
 number String
-section String?
+section String
 
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
@@ -86,8 +84,7 @@ venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
 eventSeats EventSeat[]
 
 @@unique([venueId, row, number, section])
-
-@@map("venue_seats")
+@@unique([id, venueId])
 }
 
 // ============================================================
@@ -114,7 +111,7 @@ venue Venue @relation(fields: [venueId], references: [id])
 seats EventSeat[]
 bookings Booking[]
 
-@@map("events")
+@@unique([id, venueId])
 }
 
 // ============================================================
@@ -126,6 +123,7 @@ id String @id @default(cuid())
 
 eventId String
 venueSeatId String
+venueId String
 
 status SeatStatus @default(AVAILABLE)
 
@@ -138,15 +136,14 @@ expiresAt DateTime?
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 
-event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-venueSeat VenueSeat @relation(fields: [venueSeatId], references: [id])
+event Event @relation(fields: [eventId, venueId], references: [id, venueId], onDelete: Cascade)
+venueSeat VenueSeat @relation(fields: [venueSeatId, venueId], references: [id, venueId])
 
-booking Booking?
+bookings Booking[]
 
 @@unique([eventId, venueSeatId])
+@@unique([eventId, id])
 @@index([status, expiresAt]) // used by the expiry sweep job: "find all PENDING seats past expiresAt"
-
-@@map("event_seats")
 }
 
 // ============================================================
@@ -157,7 +154,7 @@ model Booking {
 id String @id @default(cuid())
 
 eventId String
-eventSeatId String @unique // a seat can only ever have one booking pointing at it
+eventSeatId String
 
 userName String
 userPhone String
@@ -181,9 +178,7 @@ createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 
 event Event @relation(fields: [eventId], references: [id])
-eventSeat EventSeat @relation(fields: [eventSeatId], references: [id])
+eventSeat EventSeat @relation(fields: [eventId, eventSeatId], references: [eventId, id])
 
 @@index([eventId, status]) // admin dashboard: "show all PENDING bookings for this event"
-
-@@map("bookings")
 }

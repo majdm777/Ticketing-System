@@ -5,6 +5,19 @@ ALTER TABLE "Booking" DROP CONSTRAINT "Booking_eventSeatId_fkey";
 DROP INDEX "Booking_eventSeatId_key";
 
 -- AlterTable
+DO $$
+DECLARE
+  null_count integer;
+BEGIN
+  SELECT COUNT(*) INTO null_count FROM "VenueSeat" WHERE "section" IS NULL;
+
+  IF null_count > 0 THEN
+    RAISE EXCEPTION
+      'Cannot set "VenueSeat"."section" NOT NULL: % row(s) with NULL section found. Backfill a section value for each seat (e.g. UPDATE "VenueSeat" SET "section" = ''General'' WHERE "section" IS NULL) or delete those rows before applying this migration.',
+      null_count;
+  END IF;
+END $$;
+
 ALTER TABLE "VenueSeat" ALTER COLUMN "section" SET NOT NULL;
 
 -- CreateIndex
