@@ -19,7 +19,7 @@ This web app is used primarily on mobile. Treat mobile as the primary platform, 
 
 - Minimum touch target 44×44px, with adequate spacing between tappable elements.
 - No hover-dependent functionality (menus, tooltips on hover) — provide tap/click-triggered alternatives.
-- Use native mobile input types (`type="tel"`, `type="email"`, `type="number"`, `inputmode="numeric"`) and `autocomplete` attributes so the right virtual keyboard appears.
+- Use native mobile input types (`type="tel"`, `type="email"`, `type="number"`) and the React TSX property names `inputMode="numeric"` and `autoComplete` so the right virtual keyboard appears.
 - Swipe gestures only as an enhancement, never as the only way to do something.
 
 ## Navigation

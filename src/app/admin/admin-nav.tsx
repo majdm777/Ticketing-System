@@ -35,14 +35,17 @@ export function AdminNav({ adminName }: { adminName: string }) {
   const [open, setOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     if (open) {
-      drawerRef.current?.focus();
-      return;
+      closeRef.current?.focus();
+    } else if (wasOpenRef.current) {
+      openerRef.current?.focus();
     }
 
-    openerRef.current?.focus();
+    wasOpenRef.current = open;
   }, [open]);
 
   useEffect(() => {
@@ -154,6 +157,7 @@ export function AdminNav({ adminName }: { adminName: string }) {
                 Menu
               </span>
               <button
+                ref={closeRef}
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close menu"
