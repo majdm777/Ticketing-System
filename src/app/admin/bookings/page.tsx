@@ -19,13 +19,15 @@ function formatDate(date: Date | null) {
 export default async function AdminBookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ eventId?: string; status?: string }>;
+  searchParams: Promise<{ eventId?: string | string[]; status?: string | string[] }>;
 }) {
   const params = await searchParams;
-  const eventId = params.eventId ?? '';
-  const selectedStatus = statusOptions.includes(params.status as (typeof statusOptions)[number])
-    ? params.status
-    : 'all';
+  const eventId = typeof params.eventId === 'string' ? params.eventId : '';
+  const selectedStatus =
+    typeof params.status === 'string' &&
+    statusOptions.includes(params.status as (typeof statusOptions)[number])
+      ? params.status
+      : 'all';
 
   const events = await prisma.event.findMany({
     orderBy: { startsAt: 'desc' },

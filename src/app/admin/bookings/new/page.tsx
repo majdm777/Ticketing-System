@@ -54,9 +54,10 @@ function groupSeats(
 export default async function NewGuestBookingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ eventId?: string }>;
+  searchParams: Promise<{ eventId?: string | string[] }>;
 }) {
-  const { eventId = '' } = await searchParams;
+  const { eventId: rawEventId } = await searchParams;
+  const eventId = typeof rawEventId === 'string' ? rawEventId : '';
   const event = eventId
     ? await prisma.event.findUnique({
         where: { id: eventId },

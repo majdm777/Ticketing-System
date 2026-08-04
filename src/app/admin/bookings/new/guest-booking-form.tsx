@@ -34,6 +34,21 @@ export function GuestBookingForm({
   const [selectedSeatId, setSelectedSeatId] = useState('');
   const [state, formAction, pending] = useActionState(createGuestBookingAction, initialState);
 
+  const [prevSeatGroups, setPrevSeatGroups] = useState(seatGroups);
+  if (seatGroups !== prevSeatGroups) {
+    setPrevSeatGroups(seatGroups);
+    const selectedStillAvailable = seatGroups.some((group) =>
+      group.rows.some((row) =>
+        row.seats.some(
+          (seat) => seat.venueSeatId === selectedSeatId && seat.status === 'AVAILABLE',
+        ),
+      ),
+    );
+    if (selectedSeatId && !selectedStillAvailable) {
+      setSelectedSeatId('');
+    }
+  }
+
   return (
     <form action={formAction} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
       <input type="hidden" name="eventId" value={eventId} />

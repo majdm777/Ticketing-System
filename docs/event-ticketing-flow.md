@@ -125,9 +125,11 @@ Venue
     match against an external payment) and the expiry window is longer
     (`PENDING_DOOR_EXPIRY_HOURS`, default 24h), since no payment is due
     upfront.
-- Lifecycle, case 3 — admin-invited guest (planned, not yet built):
-  - Created directly by the admin, already `CONFIRMED`, no `PENDING` state
-    and no expiry — skips the request/confirm split entirely.
+- Lifecycle, case 3 — admin-invited guest:
+  - Created directly by the admin: the seat atomically transitions
+    `AVAILABLE → BOOKED` and a `Booking` is created directly `CONFIRMED`,
+    no `PENDING` state and no expiry — skips the request/confirm split
+    entirely.
 - Locking rule that applies to all three cases: every state transition is a
   single conditional `updateMany` guarded on the row's current status
   (e.g. `WHERE status = 'AVAILABLE'`), never a separate read followed by a

@@ -27,7 +27,7 @@ first — they are the source of truth for the domain and schema.
 3. **Errors**: catch errors and return typed results (e.g.
    `{ ok: true } | { ok: false; error: string }`) to the UI. Never leak raw
    error objects or stack traces to the client.
-4. **Auth**: every admin page/action runs under `src/middleware.ts` or checks
+4. **Auth**: every admin page/action runs under `src/proxy.ts` or checks
    the session cookie. Mutations run server-side; never trust client input for
    authorization.
 5. **IDs**: never assign IDs manually — `cuid()` defaults handle it.
@@ -46,6 +46,7 @@ first — they are the source of truth for the domain and schema.
     `npm run lint` and confirm they pass.
 
 ### Agreed route contract (so both pages link correctly)
+
 - `/admin` — dashboard (B)
 - `/admin/login` — login (A)
 - `/admin/venues` — venue list + create (B)
@@ -58,6 +59,7 @@ first — they are the source of truth for the domain and schema.
 ## TEAMMATE A — Foundation + Booking Operations (goes first)
 
 ### Task A1: Shared foundation
+
 - `.env.example` — add names: `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`,
   `TICKET_SECRET`, `PENDING_ONLINE_EXPIRY_HOURS`, `PENDING_DOOR_EXPIRY_HOURS`
 - `src/lib/prisma.ts` — singleton `PrismaClient` (prevent multiple instances
@@ -65,7 +67,7 @@ first — they are the source of truth for the domain and schema.
 - `src/lib/env.ts` — typed env access with safe defaults (expiry hours default
   `3` and `24`; parse numbers safely)
 - `src/lib/auth.ts` — HMAC session cookie helpers
-- `src/middleware.ts` — protect all `/admin/*` routes
+- `src/proxy.ts` — protect all `/admin/:path*` routes
 - `src/app/admin/login/page.tsx` — shared-password login form
 - `src/app/admin/layout.tsx` — admin shell + nav (links to dashboard, venues,
   events, bookings)
@@ -78,7 +80,7 @@ first — they are the source of truth for the domain and schema.
 2. Login: Server Action that takes admin name + password, compares the password
    with `ADMIN_PASSWORD` using `crypto.timingSafeEqual` (constant time), sets
    the session cookie on success. Clear the cookie on logout.
-3. Middleware: on `/admin/*`, read the cookie, verify it, redirect to
+3. Proxy: on `/admin/:path*`, read the cookie, verify it, redirect to
    `/admin/login` when missing/invalid/expired. Exempt the login page itself.
 4. Layout: minimal nav shell — `/admin`, `/admin/venues`, `/admin/events`,
    `/admin/bookings`, plus a logout link.
@@ -92,6 +94,7 @@ first — they are the source of truth for the domain and schema.
 - [ ] Commit A1 before moving to A2 (B builds on top of it)
 
 ### Task A2: Booking operations
+
 - `src/lib/seat-locking.ts` — atomic seat + booking transitions
 - `src/lib/validation/bookings.ts` — Zod schemas for booking actions
 - `src/lib/actions/bookings.ts` — Server Actions (confirm/cancel/guest)
@@ -148,6 +151,7 @@ first — they are the source of truth for the domain and schema.
 ## TEAMMATE B — Venue & Event Management + Dashboard (goes second)
 
 ### Task B1: Venue & event management
+
 - `src/lib/validation/venues.ts` — Zod schema for venue creation
 - `src/lib/validation/events.ts` — Zod schema for event creation
 - `src/lib/actions/venues.ts` — Server Action for venue creation
@@ -184,6 +188,7 @@ first — they are the source of truth for the domain and schema.
 - [ ] Commit B1 before moving to B2
 
 ### Task B2: Dashboard
+
 - `src/app/admin/page.tsx`
 
 **Behavior**
@@ -212,6 +217,7 @@ first — they are the source of truth for the domain and schema.
       (`EventSeat.status` / `Booking.status` stayed consistent)
 
 ### Out of scope (do NOT build here)
+
 - WhatsApp ticket sending / resend (external integration)
 - The scheduled expiry sweep job (separate task)
 - Multi-admin / role hierarchy
