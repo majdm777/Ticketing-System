@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { logoutAction } from '@/lib/actions/auth';
+
+const MENU_ID = 'admin-mobile-menu';
+const MENU_TITLE_ID = 'admin-mobile-menu-title';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard' },
@@ -30,6 +33,17 @@ function CloseIcon() {
 
 export function AdminNav({ adminName }: { adminName: string }) {
   const [open, setOpen] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      drawerRef.current?.focus();
+      return;
+    }
+
+    openerRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -39,6 +53,34 @@ export function AdminNav({ adminName }: { adminName: string }) {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') {
+        return;
+      }
+
+      const drawer = drawerRef.current;
+      if (!drawer) {
+        return;
+      }
+
+      const focusable = drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) {
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
@@ -76,10 +118,13 @@ export function AdminNav({ adminName }: { adminName: string }) {
           </nav>
 
           <button
+            ref={openerRef}
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Open menu"
             aria-expanded={open}
+            aria-haspopup="dialog"
+            aria-controls={MENU_ID}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-zinc-200 text-zinc-700 lg:hidden"
           >
             <MenuIcon />
@@ -96,11 +141,18 @@ export function AdminNav({ adminName }: { adminName: string }) {
             className="absolute inset-0 bg-zinc-950/40"
           />
           <nav
-            aria-label="Admin navigation"
-            className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col gap-1 border-l border-zinc-200 bg-white p-4 shadow-lg"
+            ref={drawerRef}
+            id={MENU_ID}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={MENU_TITLE_ID}
+            tabIndex={-1}
+            className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col gap-1 border-l border-zinc-200 bg-white p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg outline-none"
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-zinc-500">Menu</span>
+              <span id={MENU_TITLE_ID} className="text-sm font-semibold text-zinc-500">
+                Menu
+              </span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
