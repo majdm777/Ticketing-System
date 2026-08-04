@@ -1,0 +1,207 @@
+## Project Domain
+
+Event Ticketing is a simple, elderly-friendly web app for booking seats to a
+single event at a time. There are no user accounts — the event's unique link
+is the only access control. Payment is always handled outside the app via a
+third-party method (bank transfer, cash at the door); the app never
+processes payments itself, only tracks seat state and matches a reference
+code (or admin verification) to confirm a booking. One admin operates the
+dashboard to confirm bookings and manage events.
+
+---
+
+## Core Business Flow
+
+### Attendee (public, no account)
+
+- What they are: anyone who receives the event's link — no login, no
+  identifying record beyond a name and phone number given at booking time.
+- What they can do:
+  - View the event's details and seat map via its unique slug link
+  - Request a seat under one of the supported booking cases
+  - Receive a ticket over WhatsApp once their booking is confirmed
+- Structural rules:
+  - The event link (slug) is the entire access boundary — anyone with the
+    link can see and request seats; there is nothing to authenticate.
+  - No sensitive data is stored about an attendee beyond name and phone.
+
+### Admin (single operator)
+
+- What they are: the one person operating the dashboard for a given
+  deployment of this app. Authenticated via a shared password, not a
+  per-admin account system.
+- What they can do:
+  - Create venues and events
+  - View pending bookings that need action
+  - Confirm a "pay online with code" booking after matching the payment
+  - Confirm a "pay at door" booking after verifying intent externally
+  - Create an already-confirmed guest booking directly
+  - Resend a ticket if delivery failed
+- Structural rules:
+  - Single shared-password auth is intentional for this scope — there is
+    no multi-admin permission system. If more admins are needed later,
+    this becomes a distinct role hierarchy problem, not a config toggle.
+
+### Venue → Event → Seat hierarchy
+
+```
+Venue
+ └── VenueSeat (fixed layout, created once, reused across events)
+      └── EventSeat (cloned per Event, this is what actually gets locked)
+           └── Booking (the request/confirmation record for one hold)
+```
+
+- A `Venue`'s seat layout is authored once and reused as-is across every
+  event held there — there is no per-event seat customization.
+- Creating an `Event` clones every `VenueSeat` into a matching `EventSeat`,
+  all starting `AVAILABLE`. This clone is what booking logic actually
+  touches — the original `VenueSeat` layout is never modified by bookings.
+- A `Booking` is created per seat-hold attempt. Because a hold can expire
+  and the seat can be re-requested later, a single seat can accumulate
+  multiple `Booking` rows over its lifetime — at most one of which is ever
+  `PENDING` or `CONFIRMED` at a given moment, enforced by application logic
+  reading `EventSeat.status`, not a database uniqueness constraint.
+
+---
+
+## Authentication
+
+1. Attendee flow — no authentication:
+   1. Attendee opens the event's link (`/e/<slug>`).
+   2. The app looks up the event by slug and checks it is `PUBLISHED`.
+   3. If found and published, the seat map and event details are shown.
+   4. If not found or not published, an identical 404 is returned either
+      way — the app never reveals whether an unpublished event exists at a
+      given slug.
+2. Admin flow — shared password:
+   1. Admin submits their name and the shared admin password to a login
+      endpoint.
+   2. The password is compared using a constant-time comparison (not a
+      simple `===`), to avoid leaking timing information about a partial
+      match.
+   3. On success, a signed session cookie is set: `<adminName>.<expiresAt
+      >.<hmacSignature>`, HTTP-only, 12-hour expiry.
+   4. Every admin-only route reads this cookie, recomputes the HMAC over
+      `<adminName>.<expiresAt>`, and rejects the request if the signature
+      doesn't match or `expiresAt` has passed.
+   5. Logout simply clears the cookie; there is no server-side session
+      store to invalidate.
+
+- Notes:
+  - There is no separate `Session` table — the cookie itself is the full
+    session state, self-verified via HMAC rather than looked up.
+  - The signing secret (`ADMIN_SESSION_SECRET`) is distinct from the
+    ticket-signing secret (`TICKET_SECRET`) — compromising one must not
+    compromise the other.
+  - Cookie is `httpOnly`, `sameSite: lax`, and `secure` in production only
+    (not in local dev over plain HTTP).
+  - This model supports exactly one shared admin identity in practice —
+    the `adminName` field is a display label typed at login, not a
+    verified per-user identity.
+
+---
+
+## Booking Module
+
+- Key records involved: `EventSeat` (current lock state) and `Booking`
+  (the historical request/confirmation record). These deliberately overlap
+  in some fields (who booked it, when it expires) because they serve
+  different jobs: `EventSeat` answers "can this seat be claimed right
+  now," fast, with no join; `Booking` answers "what happened to this seat
+  over time," as a permanent log even after the seat is later released and
+  re-booked by someone else.
+- Lifecycle, case 1 — pay online with code:
+  1. Attendee requests a seat → seat atomically transitions
+     `AVAILABLE → PENDING`, a `Booking` is created `PENDING`, a reference
+     code is generated and shown to the attendee.
+  2. Attendee pays externally, using the code as a payment note.
+  3. Admin matches the code to a payment and confirms → seat transitions
+     `PENDING → BOOKED`, booking transitions `PENDING → CONFIRMED`.
+  4. If unconfirmed for `PENDING_ONLINE_EXPIRY_HOURS` (default 3h), a
+     scheduled sweep transitions the booking to `EXPIRED` and the seat back
+     to `AVAILABLE`, freeing it for a new request.
+- Lifecycle, case 2 — pay at the door (planned, not yet built):
+  - Same shape as case 1, but no reference code is generated (nothing to
+    match against an external payment) and the expiry window is longer
+    (`PENDING_DOOR_EXPIRY_HOURS`, default 24h), since no payment is due
+    upfront.
+- Lifecycle, case 3 — admin-invited guest:
+  - Created directly by the admin: the seat atomically transitions
+    `AVAILABLE → BOOKED` and a `Booking` is created directly `CONFIRMED`,
+    no `PENDING` state and no expiry — skips the request/confirm split
+    entirely.
+- Locking rule that applies to all three cases: every state transition is a
+  single conditional `updateMany` guarded on the row's current status
+  (e.g. `WHERE status = 'AVAILABLE'`), never a separate read followed by a
+  write. This is what prevents two simultaneous requests for the same seat
+  from both succeeding.
+- Reference codes: generated from a 31-character alphabet that excludes
+  visually-ambiguous characters (no `0`/`O`, `1`/`I`/`L`), since attendees
+  may read or copy them by hand. Uniqueness is checked against all
+  bookings ever made (not just active ones), with a bounded retry on
+  collision.
+
+---
+
+## Database Design
+
+### Main Entities
+
+- Venue
+- VenueSeat
+- Event
+- EventSeat
+- Booking
+
+### Enums
+
+#### EventStatus
+- DRAFT
+- PUBLISHED
+- CLOSED
+
+#### SeatStatus
+- AVAILABLE
+- PENDING
+- BOOKED
+
+#### CaseType
+- ONLINE_CODE
+- PAY_AT_DOOR
+- GUEST
+
+#### BookingStatus
+- PENDING
+- CONFIRMED
+- CANCELLED
+- EXPIRED
+
+---
+
+## Development Rules
+
+- ID strategy: `cuid()` on every model — random, unique, URL-safe, no
+  manual ID assignment.
+- Every model has `createdAt` and `updatedAt`; there are currently no
+  immutable/log-only models in this scope (an audit-log-style model would
+  follow if/when ticket scanning is reintroduced).
+- No model stores more attendee data than `userName`/`userPhone` — this is
+  a hard constraint, not a default to be casually extended.
+- State transitions on `EventSeat` and `Booking` must always be a single
+  guarded `updateMany` (conditional on current status), never a
+  `findUnique`/`findFirst` followed by a separate `update` — this is the
+  specific bug class this codebase exists to avoid, and is enforced via
+  CodeRabbit path instructions on `src/lib/seat-locking.ts`.
+- Secrets (ticket signing, admin session signing, admin password) are
+  distinct environment variables — never reused across purposes, and never
+  committed; `.env.example` documents names only, never real values.
+- Business-rule uniqueness (e.g. "a seat can have at most one active
+  booking") is enforced in application logic against `EventSeat.status`,
+  not via a database column-level `@unique` constraint, since the valid
+  historical case of multiple past `Booking` rows per seat (expired,
+  re-requested, eventually confirmed) makes a hard column constraint
+  incorrect here.
+- Environment-driven configuration values (e.g. expiry hours) must be
+  parsed and validated before use — a missing, empty, or non-numeric env
+  var must fall back to a safe default, never silently produce `NaN` or
+  `0`.

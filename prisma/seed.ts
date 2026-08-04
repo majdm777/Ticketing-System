@@ -171,7 +171,6 @@ async function main() {
       userPhone: '+15550987654',
       caseType: CaseType.PAY_AT_DOOR,
       status: BookingStatus.PENDING,
-      referenceCode: ref('TKT'),
       expiresAt: pendingExpiresAt,
     },
   })
