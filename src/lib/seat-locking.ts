@@ -1,17 +1,46 @@
+import { BookingStatus, CaseType, Prisma, SeatStatus } from '@prisma/client';
+
+import { env } from './env';
 import { prisma } from './prisma';
-import { CaseType, SeatStatus, BookingStatus } from '@prisma/client';
 import { generateReferenceCode } from './tickets';
 
 export class SeatUnavailableError extends Error {
-  constructor() {
-    super('Seat is no longer available');
+  constructor(message = 'Seat is no longer available') {
+    super(message);
     this.name = 'SeatUnavailableError';
   }
 }
 
-function getOnlineExpiryHours(): number {
-  const parsed = Number(process.env.PENDING_ONLINE_EXPIRY_HOURS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+type ActionResult<T = undefined> =
+  | (T extends undefined ? { ok: true } : { ok: true } & T)
+  | { ok: false; error: string };
+
+async function uniqueReferenceCode(tx: Prisma.TransactionClient) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = generateReferenceCode();
+    const clash = await tx.booking.findFirst({
+      where: { referenceCode: candidate },
+      select: { id: true },
+    });
+
+    if (!clash) {
+      return candidate;
+    }
+  }
+
+  throw new Error('Could not generate a unique reference code, please retry');
+}
+
+function isUniqueReferenceCodeError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002' &&
+    'meta' in error &&
+    Array.isArray((error as { meta?: { target?: unknown } }).meta?.target) &&
+    ((error as { meta?: { target?: unknown[] } }).meta?.target ?? []).includes('referenceCode')
+  );
 }
 
 export async function requestSeatOnlineCode(params: {
@@ -21,136 +50,233 @@ export async function requestSeatOnlineCode(params: {
   userPhone: string;
 }) {
   const { eventId, eventSeatId, userName, userPhone } = params;
-  const expiresAt = new Date(Date.now() + getOnlineExpiryHours() * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + env.pendingOnlineExpiryHours * 60 * 60 * 1000);
 
-  return prisma.$transaction(async (tx) => {
-    const lockResult = await tx.eventSeat.updateMany({
-      where: {
-        id: eventSeatId,
-        eventId,
-        status: SeatStatus.AVAILABLE,
-      },
-      data: {
-        status: SeatStatus.PENDING,
-        bookedByName: userName,
-        bookedByPhone: userPhone,
-        pendingSince: new Date(),
-        expiresAt,
-      },
-    });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const referenceCode = await uniqueReferenceCode(tx);
+        const lockResult = await tx.eventSeat.updateMany({
+          where: {
+            id: eventSeatId,
+            eventId,
+            status: SeatStatus.AVAILABLE,
+          },
+          data: {
+            status: SeatStatus.PENDING,
+            bookedByName: userName,
+            bookedByPhone: userPhone,
+            referenceCode,
+            pendingSince: new Date(),
+            expiresAt,
+          },
+        });
 
-    if (lockResult.count === 0) {
-      throw new SeatUnavailableError();
-    }
+        if (lockResult.count === 0) {
+          throw new SeatUnavailableError();
+        }
 
-    // Reference codes are unique across ALL bookings ever made (not just
-    // active ones), so we check against everything — a collision with an
-    // old expired booking's code would still fail the unique constraint.
-    let referenceCode = '';
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const candidate = generateReferenceCode();
-      const clash = await tx.booking.findFirst({
-        where: { referenceCode: candidate },
-        select: { id: true },
+        return tx.booking.create({
+          data: {
+            eventId,
+            eventSeatId,
+            userName,
+            userPhone,
+            caseType: CaseType.ONLINE_CODE,
+            status: BookingStatus.PENDING,
+            referenceCode,
+            expiresAt,
+          },
+        });
       });
-      if (!clash) {
-        referenceCode = candidate;
-        break;
+    } catch (error) {
+      if (!isUniqueReferenceCodeError(error) || attempt === 4) {
+        throw error;
       }
     }
-    if (!referenceCode) {
-      throw new Error('Could not generate a unique reference code, please retry');
-    }
-
-    await tx.eventSeat.update({
-      where: { id: eventSeatId },
-      data: { referenceCode },
-    });
-
-    const booking = await tx.booking.create({
-      data: {
-        eventId,
-        eventSeatId,
-        userName,
-        userPhone,
-        caseType: CaseType.ONLINE_CODE,
-        status: BookingStatus.PENDING,
-        referenceCode,
-        expiresAt,
-      },
-    });
-
-    return booking;
-  });
+  }
 }
 
 export async function confirmOnlineCodeBooking(params: {
   bookingId: string;
   adminName: string;
 }) {
-  const { bookingId, adminName } = params;
+  return confirmBooking({ bookingId: params.bookingId, adminId: params.adminName });
+}
 
-  return prisma.$transaction(async (tx) => {
-    const booking = await tx.booking.findUnique({
-      where: { id: bookingId },
-      include: { eventSeat: true },
+export async function confirmBooking(params: {
+  bookingId: string;
+  adminId: string;
+}): Promise<ActionResult<{ bookingId: string }>> {
+  const { bookingId, adminId } = params;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const bookingResult = await tx.booking.updateMany({
+        where: { id: bookingId, status: BookingStatus.PENDING },
+        data: {
+          status: BookingStatus.CONFIRMED,
+          confirmedByAdmin: adminId,
+          confirmedAt: new Date(),
+        },
+      });
+
+      if (bookingResult.count === 0) {
+        return { ok: false, error: 'Booking was already handled or does not exist.' };
+      }
+
+      const booking = await tx.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+        select: { eventId: true, eventSeatId: true },
+      });
+
+      const seatResult = await tx.eventSeat.updateMany({
+        where: {
+          id: booking.eventSeatId,
+          eventId: booking.eventId,
+          status: SeatStatus.PENDING,
+        },
+        data: {
+          status: SeatStatus.BOOKED,
+          pendingSince: null,
+          expiresAt: null,
+        },
+      });
+
+      if (seatResult.count === 0) {
+        throw new SeatUnavailableError('Seat is no longer pending');
+      }
+
+      return { ok: true, bookingId };
     });
-
-    if (!booking) {
-      throw new Error('Booking not found');
-    }
-    if (booking.status !== BookingStatus.PENDING) {
-      throw new Error(`Booking is not pending (current status: ${booking.status})`);
-    }
-    if (booking.eventSeat.expiresAt && booking.eventSeat.expiresAt < new Date()) {
-      throw new SeatUnavailableError();
+  } catch (error) {
+    if (error instanceof SeatUnavailableError) {
+      return { ok: false, error: error.message };
     }
 
-    const updateResult = await tx.booking.updateMany({
-      where: { id: bookingId, status: BookingStatus.PENDING },
-      data: {
-        status: BookingStatus.CONFIRMED,
-        confirmedByAdmin: adminName,
-        confirmedAt: new Date(),
-        ticketNote: 'paid',
-      },
+    return { ok: false, error: 'Could not confirm booking.' };
+  }
+}
+
+export async function cancelBooking(params: {
+  bookingId: string;
+}): Promise<ActionResult<{ bookingId: string }>> {
+  const { bookingId } = params;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const bookingResult = await tx.booking.updateMany({
+        where: { id: bookingId, status: BookingStatus.PENDING },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+      });
+
+      if (bookingResult.count === 0) {
+        return { ok: false, error: 'Booking was already handled or does not exist.' };
+      }
+
+      const booking = await tx.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+        select: { eventId: true, eventSeatId: true },
+      });
+
+      const seatResult = await tx.eventSeat.updateMany({
+        where: {
+          id: booking.eventSeatId,
+          eventId: booking.eventId,
+          status: SeatStatus.PENDING,
+        },
+        data: {
+          status: SeatStatus.AVAILABLE,
+          bookedByName: null,
+          bookedByPhone: null,
+          referenceCode: null,
+          pendingSince: null,
+          expiresAt: null,
+        },
+      });
+
+      if (seatResult.count === 0) {
+        throw new SeatUnavailableError('Seat is no longer pending');
+      }
+
+      return { ok: true, bookingId };
     });
-
-    if (updateResult.count === 0) {
-      throw new Error('Booking was already processed');
+  } catch (error) {
+    if (error instanceof SeatUnavailableError) {
+      return { ok: false, error: error.message };
     }
 
-    const now = new Date();
-    const seatResult = await tx.eventSeat.updateMany({
-      where: {
-        id: booking.eventSeatId,
-        status: SeatStatus.PENDING,
-        expiresAt: { gt: now },
-      },
-      data: {
-        status: SeatStatus.BOOKED,
-        expiresAt: null,
-        pendingSince: null,
-      },
+    return { ok: false, error: 'Could not cancel booking.' };
+  }
+}
+
+export async function createGuestBooking(params: {
+  eventId: string;
+  venueSeatId: string;
+  userName: string;
+  userPhone: string;
+  adminId: string;
+}): Promise<ActionResult<{ bookingId: string }>> {
+  const { eventId, venueSeatId, userName, userPhone, adminId } = params;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const seatResult = await tx.eventSeat.updateMany({
+        where: {
+          eventId,
+          venueSeatId,
+          status: SeatStatus.AVAILABLE,
+        },
+        data: {
+          status: SeatStatus.BOOKED,
+          bookedByName: userName,
+          bookedByPhone: userPhone,
+          referenceCode: null,
+          pendingSince: null,
+          expiresAt: null,
+        },
+      });
+
+      if (seatResult.count === 0) {
+        return { ok: false, error: 'Seat is no longer available.' };
+      }
+
+      const eventSeat = await tx.eventSeat.findUniqueOrThrow({
+        where: { eventId_venueSeatId: { eventId, venueSeatId } },
+        select: { id: true },
+      });
+
+      const booking = await tx.booking.create({
+        data: {
+          eventId,
+          eventSeatId: eventSeat.id,
+          userName,
+          userPhone,
+          caseType: CaseType.GUEST,
+          status: BookingStatus.CONFIRMED,
+          confirmedByAdmin: adminId,
+          confirmedAt: new Date(),
+        },
+        select: { id: true },
+      });
+
+      return { ok: true, bookingId: booking.id };
     });
-
-    if (seatResult.count === 0) {
-      throw new SeatUnavailableError();
-    }
-
-    return tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
-  });
+  } catch {
+    return { ok: false, error: 'Could not create guest booking.' };
+  }
 }
 
 export async function expireBookingIfPastDue(bookingId: string) {
   return prisma.$transaction(async (tx) => {
-    const now = new Date();
-
     const result = await tx.booking.updateMany({
       where: {
         id: bookingId,
         status: BookingStatus.PENDING,
-        expiresAt: { lt: now },
+        expiresAt: { lt: new Date() },
       },
       data: {
         status: BookingStatus.EXPIRED,
@@ -166,6 +292,7 @@ export async function expireBookingIfPastDue(bookingId: string) {
     await tx.eventSeat.updateMany({
       where: {
         id: booking.eventSeatId,
+        eventId: booking.eventId,
         status: SeatStatus.PENDING,
       },
       data: {
