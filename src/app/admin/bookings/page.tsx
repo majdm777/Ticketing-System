@@ -61,7 +61,7 @@ export default async function AdminBookingsPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Bookings</h1>
-          <p className="max-w-xl text-sm leading-6 text-zinc-600">
+          <p className="max-w-xl text-base leading-6 text-zinc-600">
             Confirm paid bookings, cancel pending holds, and review booking history.
           </p>
         </div>
@@ -83,7 +83,7 @@ export default async function AdminBookingsPage({
             <Link
               key={item.id}
               href={`/admin/bookings?eventId=${item.id}`}
-              className={`whitespace-nowrap rounded-md border px-3 py-2 text-sm ${
+              className={`inline-flex h-11 items-center whitespace-nowrap rounded-md border px-3 text-sm ${
                 item.id === eventId
                   ? 'border-zinc-950 bg-white text-zinc-950'
                   : 'border-zinc-200 bg-white text-zinc-600 hover:text-zinc-950'
@@ -110,7 +110,7 @@ export default async function AdminBookingsPage({
                   <Link
                     key={status}
                     href={`/admin/bookings?eventId=${event.id}&status=${status}`}
-                    className={`whitespace-nowrap rounded-md border px-3 py-2 text-sm ${
+                    className={`inline-flex h-11 items-center whitespace-nowrap rounded-md border px-3 text-sm ${
                       selectedStatus === status
                         ? 'border-zinc-950 bg-zinc-950 text-white'
                         : 'border-zinc-200 text-zinc-600 hover:text-zinc-950'
@@ -173,7 +173,7 @@ export default async function AdminBookingsPage({
             ))}
 
             {bookings.length === 0 ? (
-              <p className="rounded-lg border border-zinc-100 bg-white px-4 py-8 text-center text-sm text-zinc-500">
+              <p className="rounded-lg border border-zinc-100 bg-white px-4 py-8 text-center text-base text-zinc-500">
                 No bookings match this view.
               </p>
             ) : null}
@@ -223,14 +223,14 @@ export default async function AdminBookingsPage({
             </table>
 
             {bookings.length === 0 ? (
-              <p className="border-t border-zinc-100 px-4 py-8 text-center text-sm text-zinc-500">
+              <p className="border-t border-zinc-100 px-4 py-8 text-center text-base text-zinc-500">
                 No bookings match this view.
               </p>
             ) : null}
           </div>
         </>
       ) : (
-        <p className="rounded-lg border border-zinc-200 bg-white p-6 text-sm leading-6 text-zinc-600">
+        <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">
           Pick an event to review its bookings.
         </p>
       )}

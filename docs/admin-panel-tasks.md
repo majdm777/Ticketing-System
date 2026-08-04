@@ -38,11 +38,17 @@ first — they are the source of truth for the domain and schema.
    value must fall back to a safe default, never silently produce `NaN` or `0`.
 8. **UI**: English. Use Tailwind (already configured). No new UI library
    without asking.
-9. **Reference codes** (for ONLINE_CODE): generate from a 31-char alphabet
-   that excludes visually ambiguous chars (no `0`/`O`, `1`/`I`/`L`). Check
-   uniqueness against ALL bookings ever (not just active), with a bounded retry
-   on collision.
-10. **Verification**: after your feature, run `npx tsc --noEmit` and
+9. **Mobile-first**: the app is used primarily on phones. Build mobile layouts
+   first (~375–430px), then scale up with `sm:`/`md:`/`lg:` media queries. No
+   top-horizontal nav — use a hamburger/drawer (or bottom nav) below the
+   breakpoint. Minimum 44×44px touch targets, no hover-dependent
+   functionality, 16px+ inputs (prevents iOS zoom), and native input
+   types/`autocomplete`. Full rules in AGENTS.md.
+10. **Reference codes** (for ONLINE_CODE): generate from a 31-char alphabet
+    that excludes visually ambiguous chars (no `0`/`O`, `1`/`I`/`L`). Check
+    uniqueness against ALL bookings ever (not just active), with a bounded retry
+    on collision.
+11. **Verification**: after your feature, run `npx tsc --noEmit` and
     `npm run lint` and confirm they pass.
 
 ### Agreed route contract (so both pages link correctly)
@@ -119,7 +125,7 @@ first — they are the source of truth for the domain and schema.
      guarded update (0 rows affected — seat already taken / booking already
      handled) must return an error, not throw.
    - Generate ONLINE_CODE reference codes here per the alphabet rule in
-     Shared Conventions #9.
+     Shared Conventions #10.
 2. Booking list page — read `?eventId=`, show that event's bookings with a
    status filter (all/pending/confirmed/cancelled/expired). For each PENDING
    booking show `userName`, `userPhone`, `caseType`, and its `referenceCode`

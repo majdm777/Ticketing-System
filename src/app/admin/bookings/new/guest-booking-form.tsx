@@ -105,6 +105,7 @@ export function GuestBookingForm({
           <input
             name="userName"
             type="text"
+            autoComplete="name"
             className="w-full rounded-md border border-zinc-300 px-3 py-3 text-base outline-none focus:border-zinc-950"
           />
         </label>
@@ -114,6 +115,7 @@ export function GuestBookingForm({
           <input
             name="userPhone"
             type="tel"
+            autoComplete="tel"
             className="w-full rounded-md border border-zinc-300 px-3 py-3 text-base outline-none focus:border-zinc-950"
           />
         </label>

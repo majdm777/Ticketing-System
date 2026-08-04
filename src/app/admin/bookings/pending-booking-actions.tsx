@@ -29,7 +29,7 @@ export function PendingBookingActions({ bookingId }: { bookingId: string }) {
           <button
             type="submit"
             disabled={confirmPending || cancelPending}
-            className="w-full rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-500 sm:w-auto"
+            className="w-full rounded-md bg-zinc-950 px-3 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-500 sm:w-auto"
           >
             Confirm
           </button>
@@ -39,7 +39,7 @@ export function PendingBookingActions({ bookingId }: { bookingId: string }) {
           <button
             type="submit"
             disabled={confirmPending || cancelPending}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-400 sm:w-auto"
+            className="w-full rounded-md border border-zinc-300 px-3 py-3 text-sm font-medium text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-400 sm:w-auto"
           >
             Cancel
           </button>

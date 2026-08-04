@@ -49,14 +49,14 @@ export default async function AdminDashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm leading-6 text-zinc-600">
+          <p className="text-base leading-6 text-zinc-600">
             Overview of events, seat availability, and bookings needing action.
           </p>
         </div>
       </div>
 
       {events.length === 0 ? (
-        <p className="rounded-lg border border-zinc-200 bg-white p-6 text-sm leading-6 text-zinc-600">
+        <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">
           No events yet. Create an event to start selling tickets.
         </p>
       ) : (
@@ -111,13 +111,13 @@ export default async function AdminDashboardPage() {
                 <div className="mt-auto flex flex-col gap-2 sm:flex-row">
                   <Link
                     href={`/admin/bookings?eventId=${event.id}`}
-                    className="w-full rounded-md bg-zinc-950 px-4 py-2.5 text-center text-sm font-medium text-white sm:w-auto"
+                    className="w-full rounded-md bg-zinc-950 px-4 py-3 text-center text-sm font-medium text-white sm:w-auto"
                   >
                     View bookings
                   </Link>
                   <Link
                     href={`/admin/bookings/new?eventId=${event.id}`}
-                    className="w-full rounded-md border border-zinc-300 px-4 py-2.5 text-center text-sm font-medium text-zinc-700 sm:w-auto"
+                    className="w-full rounded-md border border-zinc-300 px-4 py-3 text-center text-sm font-medium text-zinc-700 sm:w-auto"
                   >
                     Guest booking
                   </Link>

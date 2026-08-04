@@ -78,7 +78,7 @@ export default async function NewGuestBookingPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Guest booking</h1>
-          <p className="max-w-xl text-sm leading-6 text-zinc-600">
+          <p className="max-w-xl text-base leading-6 text-zinc-600">
             Create an already-confirmed guest booking for an available seat.
           </p>
         </div>
@@ -101,7 +101,7 @@ export default async function NewGuestBookingPage({
           <GuestBookingForm eventId={event.id} seatGroups={groupSeats(seats)} />
         </>
       ) : (
-        <p className="rounded-lg border border-zinc-200 bg-white p-6 text-sm leading-6 text-zinc-600">
+        <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">
           Open guest booking from a selected event on the bookings page.
         </p>
       )}
