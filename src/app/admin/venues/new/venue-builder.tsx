@@ -104,23 +104,50 @@ export function VenueBuilder() {
   }
 
 
-    function updateRowSeatCount(rowId: string, rawValue: string) {
+  function pruneRowSeats(rowId: string, keepCount: number) {
+    const prefix = `${rowId}__`;
+    const isOutOfRange = (key: string) => {
+      if (!key.startsWith(prefix)) return false;
+      const seatNumber = Number(key.slice(prefix.length));
+      return !Number.isFinite(seatNumber) || keepCount === 0 || seatNumber > keepCount;
+    };
+
+    setAssignments((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (isOutOfRange(key)) delete next[key];
+      }
+      return next;
+    });
+
+    setSelectedSeats((prev) => {
+      const next = new Set(prev);
+      for (const key of next) {
+        if (isOutOfRange(key)) next.delete(key);
+      }
+      return next;
+    });
+  }
+
+  function updateRowSeatCount(rowId: string, rawValue: string) {
     const trimmed = rawValue.trim();
 
     if (trimmed === '') {
       setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, seatCount: null } : r)));
+      pruneRowSeats(rowId, 0);
       return;
     }
 
     const parsed = Number(trimmed);
     const isValidInteger = Number.isInteger(parsed) && parsed >= 1 && parsed <= 100;
 
-    setRows((prev) =>
-      prev.map((r) =>
-        r.id === rowId ? { ...r, seatCount: isValidInteger ? parsed : r.seatCount } : r
-      )
-    );
+    if (isValidInteger) {
+      setRows((prev) =>
+        prev.map((r) => (r.id === rowId ? { ...r, seatCount: parsed } : r))
+      );
+      pruneRowSeats(rowId, parsed);
     }
+  }
 
   function toggleSeat(key: string) {
     setSelectedSeats((prev) => {
@@ -266,12 +293,13 @@ export function VenueBuilder() {
           </span>
         </div>
 
-        {rows.map((row) => (
+        {rows.map((row, rowIndex) => (
           <div key={row.id} className="flex items-center gap-3 mb-2">
             <input
               type="text"
               value={row.label}
               onChange={(e) => updateRowLabel(row.id, e.target.value)}
+              aria-label={`Row ${rowIndex + 1} label`}
               className="flex-1 border border-gray-300 rounded-md px-3 py-2"
               placeholder="Row label (e.g. A)"
             />
@@ -281,6 +309,7 @@ export function VenueBuilder() {
               max={100}
               value={row.seatCount ?? ''}
               onChange={(e) => updateRowSeatCount(row.id, e.target.value)}
+              aria-label={`Row ${rowIndex + 1} seat count`}
               className="flex-1 border border-gray-300 rounded-md px-3 py-2"
               placeholder="Seats in this row"
             />
@@ -312,6 +341,7 @@ export function VenueBuilder() {
             type="text"
             value={draftSectionName}
             onChange={(e) => setDraftSectionName(e.target.value)}
+            aria-label="Section name"
             className="w-full border border-gray-300 rounded-md px-3 py-2"
             placeholder="Section name (e.g. Front, VIP)"
           />
@@ -321,6 +351,7 @@ export function VenueBuilder() {
             value={draftSectionPrice}
             onChange={(e) => setDraftSectionPrice(e.target.value)}
             inputMode="numeric"
+            aria-label="Section price"
             className="w-full border border-gray-300 rounded-md px-3 py-2"
             placeholder="Price (e.g. 250000)"
           />
@@ -333,6 +364,11 @@ export function VenueBuilder() {
         >
           Assign {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
         </button>
+        {draftSectionName.trim() && selectedSeats.size > 0 && validPrice(draftSectionPrice) === null ? (
+          <p role="alert" className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Add a price for section &quot;{draftSectionName.trim()}&quot; (a whole number above zero) before assigning seats.
+          </p>
+        ) : null}
         <p className="text-sm text-gray-500 mt-3">
           Click seats below to select them for this section, then hit Assign. Any seat left
           unassigned will default to section &quot;G&quot; (General).
@@ -417,7 +453,10 @@ export function VenueBuilder() {
       </div>
 
       {result.error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-3 mb-4 text-sm">
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 rounded-md p-3 mb-4 text-sm"
+        >
           {result.error}
         </div>
       )}
