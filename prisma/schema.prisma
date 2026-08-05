@@ -44,8 +44,26 @@ model Venue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seats  VenueSeat[]
-  events Event[]
+  sections VenueSection[]
+  seats    VenueSeat[]
+  events   Event[]
+}
+
+model VenueSection {
+  id      String @id @default(cuid())
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  name  String
+  price Int
+
+  seats VenueSeat[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([venueId, name])
+  @@unique([id, venueId])
 }
 
 model VenueSeat {
@@ -53,13 +71,14 @@ model VenueSeat {
   venueId String
   venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
-  row     String
-  number  String
-  section String
+  row       String
+  number    String
+  sectionId String
+  section   VenueSection @relation(fields: [sectionId, venueId], references: [id, venueId])
 
   eventSeats EventSeat[]
 
-  @@unique([venueId, row, number, section])
+  @@unique([venueId, row, number, sectionId])
   @@unique([id, venueId])
 }
 
