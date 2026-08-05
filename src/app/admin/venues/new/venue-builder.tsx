@@ -140,7 +140,12 @@ export function VenueBuilder() {
     if (selectedSeats.size === 0) return;
     if (validPrice(draftSectionPrice) === null) return;
 
-    setSectionPrices((prev) => ({ ...prev, [name]: draftSectionPrice.trim() }));
+    const price = draftSectionPrice.trim();
+    if (name === 'G') {
+      setGPrice(price);
+    } else {
+      setSectionPrices((prev) => ({ ...prev, [name]: price }));
+    }
     setAssignments((prev) => {
       const next = { ...prev };
       for (const key of selectedSeats) {

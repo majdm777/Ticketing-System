@@ -8,7 +8,7 @@ async function getVenues() {
     orderBy: { createdAt: 'desc' },
     include: {
       sections: { select: { name: true, price: true } },
-      seats: { select: { id: true } },
+      _count: { select: { seats: true } },
     },
   });
 
@@ -17,7 +17,7 @@ async function getVenues() {
       id: venue.id,
       name: venue.name,
       address: venue.address,
-      capacity: venue.seats.length,
+      capacity: venue._count.seats,
       sections: venue.sections.map((s) => ({ name: s.name, price: s.price })),
     };
   });
