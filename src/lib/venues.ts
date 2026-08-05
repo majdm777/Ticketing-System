@@ -52,17 +52,22 @@ export async function createVenue(
 
 
 export async function deleteVenue(venueId: string): Promise<ActionResult> {
-  const eventCount = await prisma.event.count({ where: { venueId } });
+  
+  try{
+    const eventCount = await prisma.event.count({ where: { venueId } });
 
   if (eventCount > 0) {
-    return {
-      ok: false,
-      error: `Can't delete this venue — it has ${eventCount} event${
-        eventCount === 1 ? '' : 's'
-      } using it. Remove those events first.`,
-    };
-  }
-
+        return {
+        ok: false,
+        error: `Can't delete this venue — it has ${eventCount} event${
+            eventCount === 1 ? '' : 's'
+        } using it. Remove those events first.`,
+        };
+    }
+    }catch(err){
+        console.error('Failed to delete venue', err);
+        return { ok: false, error: 'Something went wrong deleting the venue.' };
+    }
   try {
     await prisma.venue.delete({ where: { id: venueId } });
     return { ok: true, data: undefined };
