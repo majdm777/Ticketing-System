@@ -11,10 +11,12 @@ type SectionsAndSeats = {
   seats: SeatInput[];
 };
 
-// Guards shared by create and update: every seat must point at a section
-// that has a price, and no duplicate (row, number, section) combos. Cheaper
-// and clearer than letting the @@unique constraint on VenueSeat reject the
-// whole batch with a raw DB error.
+// Guards shared by create and update: seat numbers must be positive integers,
+// contiguous (1..N) within each row, and unique by (row, number) regardless of
+// section, and every seat must point at a section that has a price. Cheaper and
+// clearer than letting the @@unique constraint on VenueSeat reject the whole
+// batch with a raw DB error, and guarantees the builder/loader round-trip
+// without dropping or synthesizing seats.
 function validateSectionsAndSeats(input: SectionsAndSeats): string | null {
   const { sections, seats } = input;
 
@@ -23,19 +25,33 @@ function validateSectionsAndSeats(input: SectionsAndSeats): string | null {
   }
 
   const sectionNames = new Set(sections.map((s) => s.name));
+  const seenKeys = new Set<string>();
+  const numbersByRow = new Map<string, number[]>();
   for (const seat of seats) {
+    const number = Number(seat.number);
+    if (!Number.isInteger(number) || number < 1) {
+      return `Seat ${seat.row}${seat.number} has an invalid number — seat numbers must be positive whole numbers.`;
+    }
     if (!sectionNames.has(seat.section)) {
       return `Seat ${seat.row}${seat.number} references a section ("${seat.section}") that has no price.`;
     }
-  }
-
-  const seenKeys = new Set<string>();
-  for (const seat of seats) {
-    const key = JSON.stringify([seat.row, seat.number, seat.section]);
+    const key = JSON.stringify([seat.row, seat.number]);
     if (seenKeys.has(key)) {
-      return `Duplicate seat detected: row ${seat.row}, seat ${seat.number}, section "${seat.section}".`;
+      return `Duplicate seat detected: row ${seat.row}, seat ${seat.number}.`;
     }
     seenKeys.add(key);
+    const numbers = numbersByRow.get(seat.row);
+    if (numbers) {
+      numbers.push(number);
+    } else {
+      numbersByRow.set(seat.row, [number]);
+    }
+  }
+
+  for (const [row, numbers] of numbersByRow) {
+    if (Math.max(...numbers) !== numbers.length) {
+      return `Row "${row}" must have contiguous seat numbers starting at 1.`;
+    }
   }
 
   return null;
@@ -103,34 +119,58 @@ export async function updateVenue(
     return { ok: false, error: guardError };
   }
 
-  try {
-    const eventCount = await prisma.event.count({ where: { venueId } });
-    if (eventCount > 0) {
-      return {
-        ok: false,
-        error: `Can't edit this venue's layout — it has ${eventCount} event${
-          eventCount === 1 ? '' : 's'
-        } using it. Remove those events first.`,
-      };
+  // Serializable isolation makes the in-transaction event check and the full
+  // rebuild conflict-serializable with any concurrent event/event-seat insert,
+  // so we can never delete seats a freshly created event points at. Concurrent
+  // venue edits that hit a serialization conflict are retried (last write wins).
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const venue = await tx.venue.findUnique({
+            where: { id: venueId },
+            select: { id: true },
+          });
+          if (!venue) {
+            return { ok: false as const, error: 'Venue not found.' };
+          }
+
+          const eventCount = await tx.event.count({ where: { venueId } });
+          if (eventCount > 0) {
+            return {
+              ok: false as const,
+              error: `Can't edit this venue's layout — it has ${eventCount} event${
+                eventCount === 1 ? '' : 's'
+              } using it. Remove those events first.`,
+            };
+          }
+
+          // Full rebuild. Safe because editing is blocked once events exist, so
+          // nothing references these seats/sections yet.
+          await tx.venueSeat.deleteMany({ where: { venueId } });
+          await tx.venueSection.deleteMany({ where: { venueId } });
+
+          await createSectionsAndSeats(tx, venueId, input);
+
+          return { ok: true, data: { venueId, seatCount: input.seats.length } };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        return { ok: false, error: 'Venue not found.' };
+      }
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+        if (attempt < maxAttempts) continue;
+        return { ok: false, error: 'The venue changed while saving. Please try again.' };
+      }
+      console.error('Failed to update venue', err);
+      return { ok: false, error: 'Something went wrong updating the venue.' };
     }
-
-    return await prisma.$transaction(async (tx) => {
-      // Full rebuild. Safe because editing is blocked once events exist, so
-      // nothing references these seats/sections yet.
-      await tx.venueSeat.deleteMany({ where: { venueId } });
-      await tx.venueSection.deleteMany({ where: { venueId } });
-
-      await createSectionsAndSeats(tx, venueId, input);
-
-      return { ok: true, data: { venueId, seatCount: input.seats.length } };
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-      return { ok: false, error: 'Venue not found.' };
-    }
-    console.error('Failed to update venue', err);
-    return { ok: false, error: 'Something went wrong updating the venue.' };
   }
+
+  return { ok: false, error: 'Something went wrong updating the venue.' };
 }
 
 export type VenueForEdit = {

@@ -36,7 +36,7 @@ export default async function EditVenuePage({
           </div>
           <Link
             href="/admin/venues"
-            className="inline-block bg-black text-white px-4 py-2 rounded-md font-medium hover:bg-gray-800"
+            className="inline-flex items-center min-h-11 bg-black text-white px-4 py-2 rounded-md font-medium hover:bg-gray-800"
           >
             Back to venues
           </Link>
