@@ -22,6 +22,13 @@ export type CreateVenueInput = z.infer<typeof createVenueSchema>;
 export type SeatInput = z.infer<typeof seatSchema>;
 export type SectionInput = z.infer<typeof sectionSchema>;
 
+export const updateVenueSchema = z.object({
+  sections: z.array(sectionSchema).min(1, 'At least one section is required.'),
+  seats: z.array(seatSchema).min(1, 'At least one seat is required.'),
+});
+
+export type UpdateVenueInput = z.infer<typeof updateVenueSchema>;
+
 export const venueIdSchema = z.object({
   venueId: z.string().trim().min(1, 'Venue is required.'),
 });

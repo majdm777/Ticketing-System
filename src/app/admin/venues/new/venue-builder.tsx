@@ -4,12 +4,25 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { buildSectionColorMap } from '@/lib/section-colors';
-import { createVenueAction, type VenueActionState } from '@/lib/actions/venues';
+import {
+  createVenueAction,
+  updateVenueAction,
+  type VenueActionState,
+} from '@/lib/actions/venues';
 
 type RowDraft = {
   id: string;
   label: string;
   seatCount: number | null;
+};
+
+export type VenueBuilderInitialData = {
+  name: string;
+  address: string;
+  rows: { id: string; label: string; seatCount: number }[];
+  assignments: Record<string, string>;
+  sectionPrices: Record<string, string>;
+  gPrice: string;
 };
 
 
@@ -41,11 +54,23 @@ function validPrice(raw: string): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function VenueBuilder() {
-  const [rows, setRows] = useState<RowDraft[]>([{ id: nextRowId(), label: 'A', seatCount: 8 }]);
+export function VenueBuilder({
+  initialData,
+  venueId,
+}: {
+  initialData?: VenueBuilderInitialData;
+  venueId?: string;
+}) {
+  const [rows, setRows] = useState<RowDraft[]>(
+    initialData
+      ? initialData.rows.map((r) => ({ id: r.id, label: r.label, seatCount: r.seatCount }))
+      : [{ id: nextRowId(), label: 'A', seatCount: 8 }]
+  );
   // Committed assignments: seatKey -> section name. This is the real,
   // saved state of the venue-in-progress.
-  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [assignments, setAssignments] = useState<Record<string, string>>(
+    initialData?.assignments ?? {}
+  );
 
   // The section currently being built: its name and price, and the set of
   // seats toggled "in" for it so far, not yet committed to `assignments`.
@@ -56,15 +81,19 @@ export function VenueBuilder() {
   // Committed section prices, keyed by section name. "G" (the default for
   // unassigned seats) is tracked separately since it never goes through the
   // assign flow.
-  const [sectionPrices, setSectionPrices] = useState<Record<string, string>>({});
-  const [gPrice, setGPrice] = useState('');
+  const [sectionPrices, setSectionPrices] = useState<Record<string, string>>(
+    initialData?.sectionPrices ?? {}
+  );
+  const [gPrice, setGPrice] = useState(initialData?.gPrice ?? '');
 
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
+  const [name, setName] = useState(initialData?.name ?? '');
+  const [address, setAddress] = useState(initialData?.address ?? '');
   const [result, setResult] = useState<VenueActionState>({ ok: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const router = useRouter();
+
+  const isEditing = Boolean(venueId);
 
   useEffect(() => {
     if (result.ok && result.venueId) {
@@ -187,7 +216,7 @@ export function VenueBuilder() {
 
   async function handleSubmit() {
 
-    if (!name.trim() || !address.trim()) {
+    if (!isEditing && (!name.trim() || !address.trim())) {
       setResult({ ok: false, error: 'Venue name and address are required.' });
       return;
     }
@@ -243,10 +272,17 @@ export function VenueBuilder() {
 
     setIsSubmitting(true);
     try {
-      const actionResult = await createVenueAction({ name, address, sections, seats });
+      const actionResult = isEditing && venueId
+        ? await updateVenueAction(venueId, { sections, seats })
+        : await createVenueAction({ name, address, sections, seats });
       setResult(actionResult);
     } catch {
-      setResult({ ok: false, error: 'Unable to create the venue. Please try again.' });
+      setResult({
+        ok: false,
+        error: isEditing
+          ? 'Unable to save the venue. Please try again.'
+          : 'Unable to create the venue. Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -261,29 +297,31 @@ export function VenueBuilder() {
 
   return (
     <div>
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-bold mb-4">Venue details</h2>
-        <label className="block mb-4">
-          <span className="text-sm font-medium text-gray-700">Venue name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-            placeholder="Grand Hall"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-gray-700">Address</span>
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-            placeholder="12 Main Street, Baabda"
-          />
-        </label>
-      </div>
+      {!isEditing && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4">Venue details</h2>
+          <label className="block mb-4">
+            <span className="text-sm font-medium text-gray-700">Venue name</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              placeholder="Grand Hall"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Address</span>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              placeholder="12 Main Street, Baabda"
+            />
+          </label>
+        </div>
+      )}
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -467,7 +505,13 @@ export function VenueBuilder() {
         disabled={isSubmitting}
         className="bg-black text-white px-6 py-2 rounded-md font-medium hover:bg-gray-800 disabled:opacity-50"
       >
-        {isSubmitting ? 'Creating venue...' : 'Create venue'}
+        {isSubmitting
+          ? isEditing
+            ? 'Saving changes...'
+            : 'Creating venue...'
+          : isEditing
+            ? 'Save changes'
+            : 'Create venue'}
       </button>
     </div>
   );
