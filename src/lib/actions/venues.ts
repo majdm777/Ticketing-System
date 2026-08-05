@@ -20,12 +20,6 @@ function formValue(formData: FormData, name: string) {
   return String(formData.get(name) ?? '');
 }
 
-/**
- * Sections arrive as parallel indexed fields — sections[0].name,
- * sections[0].rowLabels, sections[0].seatsPerRow, sections[1].name, etc.
- * — since a plain HTML form can't submit a nested array directly. This
- * reconstructs that array from FormData before handing it to Zod.
- */
 export type DeleteVenueState = {
   ok: boolean;
   error?: string;

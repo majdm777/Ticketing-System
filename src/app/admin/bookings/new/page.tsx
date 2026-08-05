@@ -9,25 +9,31 @@ function groupSeats(
     id: string;
     venueSeatId: string;
     status: string;
-    venueSeat: { section: string; row: string; number: string };
+    venueSeat: { section: { name: string; price: number }; row: string; number: string };
   }[],
 ) {
   const sections = new Map<
     string,
-    Map<
-      string,
-      {
-        id: string;
-        venueSeatId: string;
-        status: string;
-        label: string;
-      }[]
-    >
+    {
+      price: number;
+      rows: Map<
+        string,
+        {
+          id: string;
+          venueSeatId: string;
+          status: string;
+          label: string;
+        }[]
+      >;
+    }
   >();
 
   for (const seat of seats) {
-    const section = sections.get(seat.venueSeat.section) ?? new Map();
-    const row = section.get(seat.venueSeat.row) ?? [];
+    const entry = sections.get(seat.venueSeat.section.name) ?? {
+      price: seat.venueSeat.section.price,
+      rows: new Map<string, { id: string; venueSeatId: string; status: string; label: string }[]>(),
+    };
+    const row = entry.rows.get(seat.venueSeat.row) ?? [];
 
     row.push({
       id: seat.id,
@@ -36,12 +42,13 @@ function groupSeats(
       label: seat.venueSeat.number,
     });
 
-    section.set(seat.venueSeat.row, row);
-    sections.set(seat.venueSeat.section, section);
+    entry.rows.set(seat.venueSeat.row, row);
+    sections.set(seat.venueSeat.section.name, entry);
   }
 
-  return Array.from(sections.entries()).map(([section, rows]) => ({
+  return Array.from(sections.entries()).map(([section, { price, rows }]) => ({
     section,
+    price,
     rows: Array.from(rows.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([row, rowSeats]) => ({
@@ -68,7 +75,7 @@ export default async function NewGuestBookingPage({
   const seats = event
       ? await prisma.eventSeat.findMany({
           where: { eventId: event.id },
-          include: { venueSeat: true },
+          include: { venueSeat: { include: { section: true } } },
         orderBy: { createdAt: 'asc' },
         })
     : [];

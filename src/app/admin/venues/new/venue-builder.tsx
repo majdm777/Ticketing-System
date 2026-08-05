@@ -34,16 +34,30 @@ function seatKey(rowId: string, seatNumber: number): string {
   return `${rowId}__${seatNumber}`;
 }
 
+function validPrice(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function VenueBuilder() {
   const [rows, setRows] = useState<RowDraft[]>([{ id: nextRowId(), label: 'A', seatCount: 8 }]);
   // Committed assignments: seatKey -> section name. This is the real,
   // saved state of the venue-in-progress.
   const [assignments, setAssignments] = useState<Record<string, string>>({});
 
-  // The section currently being built: its name, and the set of seats
-  // toggled "in" for it so far, not yet committed to `assignments`.
+  // The section currently being built: its name and price, and the set of
+  // seats toggled "in" for it so far, not yet committed to `assignments`.
   const [draftSectionName, setDraftSectionName] = useState('');
+  const [draftSectionPrice, setDraftSectionPrice] = useState('');
   const [selectedSeats, setSelectedSeats] = useState<Set<string>>(new Set());
+
+  // Committed section prices, keyed by section name. "G" (the default for
+  // unassigned seats) is tracked separately since it never goes through the
+  // assign flow.
+  const [sectionPrices, setSectionPrices] = useState<Record<string, string>>({});
+  const [gPrice, setGPrice] = useState('');
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -124,7 +138,9 @@ export function VenueBuilder() {
     const name = draftSectionName.trim();
     if (!name) return;
     if (selectedSeats.size === 0) return;
+    if (validPrice(draftSectionPrice) === null) return;
 
+    setSectionPrices((prev) => ({ ...prev, [name]: draftSectionPrice.trim() }));
     setAssignments((prev) => {
       const next = { ...prev };
       for (const key of selectedSeats) {
@@ -134,6 +150,7 @@ export function VenueBuilder() {
     });
     setSelectedSeats(new Set());
     setDraftSectionName('');
+    setDraftSectionPrice('');
   }
 
   async function handleSubmit() {
@@ -163,20 +180,38 @@ export function VenueBuilder() {
 
     // Flatten the grid into a flat seat list, defaulting any seat that
     // never got explicitly assigned to section "G".
+    const usedSectionNames = new Set<string>();
     const seats = rows.flatMap((row) =>
       Array.from({ length: row.seatCount ?? 0 }).map((_, seatIndex) => {
         const key = seatKey(row.id, seatIndex + 1);
+        const section = assignments[key] ?? 'G';
+        usedSectionNames.add(section);
         return {
           row: row.label, // display label is still what actually gets saved as the seat's row
           number: String(seatIndex + 1),
-          section: assignments[key] ?? 'G',
+          section,
         };
       })
     );
 
+    // Every section that actually has seats needs a price, including "G".
+    const sections: { name: string; price: number }[] = [];
+    for (const sectionName of usedSectionNames) {
+      const rawPrice = sectionName === 'G' ? gPrice : (sectionPrices[sectionName] ?? '');
+      const price = validPrice(rawPrice);
+      if (price === null) {
+        setResult({
+          ok: false,
+          error: `Section "${sectionName}" needs a price (a whole number above zero).`,
+        });
+        return;
+      }
+      sections.push({ name: sectionName, price });
+    }
+
     setIsSubmitting(true);
     try {
-      const actionResult = await createVenueAction({ name, address, seats });
+      const actionResult = await createVenueAction({ name, address, sections, seats });
       setResult(actionResult);
     } catch {
       setResult({ ok: false, error: 'Unable to create the venue. Please try again.' });
@@ -267,27 +302,51 @@ export function VenueBuilder() {
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-bold mb-3">Build a section</h2>
-        <div className="flex items-center gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <input
             type="text"
             value={draftSectionName}
             onChange={(e) => setDraftSectionName(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+            className="w-full border border-gray-300 rounded-md px-3 py-2"
             placeholder="Section name (e.g. Front, VIP)"
           />
-          <button
-            type="button"
-            onClick={assignSelectedToSection}
-            disabled={!draftSectionName.trim() || selectedSeats.size === 0}
-            className="bg-black text-white px-4 py-2 rounded-md font-medium text-sm disabled:opacity-40"
-          >
-            Assign {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
-          </button>
+          <input
+            type="number"
+            min={1}
+            value={draftSectionPrice}
+            onChange={(e) => setDraftSectionPrice(e.target.value)}
+            inputMode="numeric"
+            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Price (e.g. 250000)"
+          />
         </div>
-        <p className="text-sm text-gray-500">
+        <button
+          type="button"
+          onClick={assignSelectedToSection}
+          disabled={!draftSectionName.trim() || validPrice(draftSectionPrice) === null || selectedSeats.size === 0}
+          className="bg-black text-white px-4 py-2 rounded-md font-medium text-sm disabled:opacity-40"
+        >
+          Assign {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
+        </button>
+        <p className="text-sm text-gray-500 mt-3">
           Click seats below to select them for this section, then hit Assign. Any seat left
           unassigned will default to section &quot;G&quot; (General).
         </p>
+        <div className="mt-4 flex items-center gap-3 border-t border-gray-200 pt-3">
+          <label htmlFor="g-section-price" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+            Default &quot;G&quot; price
+          </label>
+          <input
+            id="g-section-price"
+            type="number"
+            min={1}
+            value={gPrice}
+            onChange={(e) => setGPrice(e.target.value)}
+            inputMode="numeric"
+            className="w-40 border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Price (e.g. 100000)"
+          />
+        </div>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
@@ -335,15 +394,19 @@ export function VenueBuilder() {
 
         {sectionNames.length > 0 && (
           <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-200">
-            {sectionNames.map((sectionName) => (
-              <div key={sectionName} className="flex items-center gap-1.5 text-sm text-gray-600">
-                <span
-                  className="w-3 h-3 rounded-full inline-block"
-                  style={{ backgroundColor: colorMap.get(sectionName) }}
-                />
-                {sectionName}
-              </div>
-            ))}
+            {sectionNames.map((sectionName) => {
+              const price = sectionName === 'G' ? gPrice : (sectionPrices[sectionName] ?? '');
+              return (
+                <div key={sectionName} className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <span
+                    className="w-3 h-3 rounded-full inline-block"
+                    style={{ backgroundColor: colorMap.get(sectionName) }}
+                  />
+                  {sectionName}
+                  {price ? <span className="text-gray-400">· {price}</span> : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

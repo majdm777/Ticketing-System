@@ -16,6 +16,7 @@ type Seat = {
 
 type SeatGroup = {
   section: string;
+  price: number;
   rows: {
     row: string;
     seats: Seat[];
@@ -57,7 +58,12 @@ export function GuestBookingForm({
       <div className="space-y-4 lg:space-y-6">
         {seatGroups.map((group) => (
           <section key={group.section} className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">{group.section}</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+              {group.section}
+              <span className="ml-2 normal-case tracking-normal text-zinc-400">
+                · {group.price}
+              </span>
+            </h2>
             <div className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3 sm:p-4">
               {group.rows.map((row) => (
                 <div key={row.row} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[4rem_minmax(0,1fr)] sm:gap-3">

@@ -7,20 +7,18 @@ async function getVenues() {
   const venues = await prisma.venue.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
-      seats: {
-        select: { section: true },
-      },
+      sections: { select: { name: true, price: true } },
+      seats: { select: { id: true } },
     },
   });
 
   return venues.map((venue) => {
-    const sectionNames = new Set(venue.seats.map((s) => s.section).filter(Boolean));
     return {
       id: venue.id,
       name: venue.name,
       address: venue.address,
       capacity: venue.seats.length,
-      sectionCount: sectionNames.size,
+      sections: venue.sections.map((s) => ({ name: s.name, price: s.price })),
     };
   });
 }
@@ -63,9 +61,22 @@ export default async function VenuesPage() {
                 </div>
                 <div className="border border-gray-200 rounded-md p-3">
                   <div className="text-xs uppercase text-gray-500 tracking-wide">Sections</div>
-                  <div className="text-xl font-bold">{venue.sectionCount}</div>
+                  <div className="text-xl font-bold">{venue.sections.length}</div>
                 </div>
               </div>
+
+              {venue.sections.length > 0 ? (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {venue.sections.map((section) => (
+                    <span
+                      key={section.name}
+                      className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-600"
+                    >
+                      {section.name} · {section.price}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
             <div className="flex gap-2">
                 <Link

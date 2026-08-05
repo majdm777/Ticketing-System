@@ -9,16 +9,26 @@ type ActionResult<T = undefined> =
 export async function createVenue(
   input: CreateVenueInput
 ): Promise<ActionResult<{ venueId: string; seatCount: number }>> {
-  const { seats } = input;
+  const { seats, sections } = input;
 
   if (seats.length === 0) {
     return { ok: false, error: 'At least one seat is required.' };
   }
 
+  const sectionNames = new Set(sections.map((s) => s.name));
+  for (const seat of seats) {
+    if (!sectionNames.has(seat.section)) {
+      return {
+        ok: false,
+        error: `Seat ${seat.row}${seat.number} references a section ("${seat.section}") that has no price.`,
+      };
+    }
+  }
+
   // Guard against duplicate (row, number, section) combos before hitting
   // the database — cheaper and clearer than letting the @@unique
   // constraint on VenueSeat reject the whole batch with a raw DB error.
- const seenKeys = new Set<string>();
+  const seenKeys = new Set<string>();
   for (const seat of seats) {
     const key = JSON.stringify([seat.row, seat.number, seat.section]);
     if (seenKeys.has(key)) {
@@ -31,25 +41,40 @@ export async function createVenue(
   }
 
   try {
-    const venue = await prisma.venue.create({
-      data: {
-        name: input.name,
-        address: input.address,
-        seats: {
-          create: seats,
+    return await prisma.$transaction(async (tx) => {
+      const venue = await tx.venue.create({
+        data: {
+          name: input.name,
+          address: input.address,
+          sections: {
+            create: sections.map((s) => ({ name: s.name, price: s.price })),
+          },
         },
-      },
-      select: { id: true },
-    });
+        select: { id: true },
+      });
 
-    return { ok: true, data: { venueId: venue.id, seatCount: seats.length } };
+      const createdSections = await tx.venueSection.findMany({
+        where: { venueId: venue.id },
+        select: { id: true, name: true },
+      });
+      const sectionIdByName = new Map(createdSections.map((s) => [s.name, s.id]));
+
+      await tx.venueSeat.createMany({
+        data: seats.map((seat) => ({
+          venueId: venue.id,
+          row: seat.row,
+          number: seat.number,
+          sectionId: sectionIdByName.get(seat.section) ?? '',
+        })),
+      });
+
+      return { ok: true, data: { venueId: venue.id, seatCount: seats.length } };
+    });
   } catch (err) {
     console.error('Failed to create venue', err);
     return { ok: false, error: 'Something went wrong creating the venue.' };
   }
 }
-
-
 
 export async function deleteVenue(venueId: string): Promise<ActionResult> {
   

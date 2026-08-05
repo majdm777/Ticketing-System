@@ -8,15 +8,42 @@ import {
 
 const prisma = new PrismaClient()
 
-function buildSeats(section: string, rows: number, seatsPerRow: number) {
+function buildSeats(sectionId: string, rows: number, seatsPerRow: number) {
   const rowsArr = 'ABCDEFGH'.slice(0, rows).split('')
-  const seats: { row: string; number: string; section: string }[] = []
+  const seats: { row: string; number: string; sectionId: string }[] = []
   for (const row of rowsArr) {
     for (let n = 1; n <= seatsPerRow; n++) {
-      seats.push({ row, number: String(n), section })
+      seats.push({ row, number: String(n), sectionId })
     }
   }
   return seats
+}
+
+async function createVenueWithSections(
+  name: string,
+  address: string,
+  sections: { name: string; price: number }[],
+  buildSeatRows: (sectionById: Map<string, string>) => { row: string; number: string; sectionId: string }[],
+) {
+  const venue = await prisma.venue.create({
+    data: {
+      name,
+      address,
+      sections: { create: sections },
+    },
+    include: { sections: true },
+  })
+
+  const sectionIdByName = new Map(venue.sections.map((s) => [s.name, s.id]))
+  const seatData = buildSeatRows(sectionIdByName).map((seat) => ({
+    ...seat,
+    venueId: venue.id,
+  }))
+  await prisma.venueSeat.createMany({
+    data: seatData,
+  })
+
+  return venue
 }
 
 function future(days: number, hour = 19) {
@@ -50,25 +77,25 @@ async function main() {
   await prisma.venueSeat.deleteMany()
   await prisma.venue.deleteMany()
 
-  const venueA = await prisma.venue.create({
-    data: {
-      name: 'Grand Hall',
-      address: '123 Main St, Springfield',
-      seats: {
-        create: [...buildSeats('Floor', 3, 8), ...buildSeats('Balcony', 2, 6)],
-      },
-    },
-    include: { seats: true },
-  })
+  const venueA = await createVenueWithSections(
+    'Grand Hall',
+    '123 Main St, Springfield',
+    [
+      { name: 'Floor', price: 300000 },
+      { name: 'Balcony', price: 200000 },
+    ],
+    (sectionIdByName) => [
+      ...buildSeats(sectionIdByName.get('Floor')!, 3, 8),
+      ...buildSeats(sectionIdByName.get('Balcony')!, 2, 6),
+    ],
+  )
 
-  const venueB = await prisma.venue.create({
-    data: {
-      name: 'The Loft',
-      address: '456 Oak Ave, Riverside',
-      seats: { create: buildSeats('General Admission', 4, 5) },
-    },
-    include: { seats: true },
-  })
+  const venueB = await createVenueWithSections(
+    'The Loft',
+    '456 Oak Ave, Riverside',
+    [{ name: 'General Admission', price: 150000 }],
+    (sectionIdByName) => buildSeats(sectionIdByName.get('General Admission')!, 4, 5),
+  )
 
   const events = await prisma.event.createManyAndReturn({
     data: [
