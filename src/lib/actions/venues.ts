@@ -26,51 +26,6 @@ function formValue(formData: FormData, name: string) {
  * — since a plain HTML form can't submit a nested array directly. This
  * reconstructs that array from FormData before handing it to Zod.
  */
-function parseSections(formData: FormData) {
-  const sections: { name: string; rowLabels: string; seatsPerRow: string }[] = [];
-  let i = 0;
-
-  while (formData.has(`sections[${i}].name`)) {
-    sections.push({
-      name: formValue(formData, `sections[${i}].name`),
-      rowLabels: formValue(formData, `sections[${i}].rowLabels`),
-      seatsPerRow: formValue(formData, `sections[${i}].seatsPerRow`),
-    });
-    i++;
-  }
-
-  return sections;
-}
-
-export async function createVenueStateAction(
-  _previousState: VenueActionState,
-  formData: FormData
-): Promise<VenueActionState> {
-  const session = await getAdminSession();
-  if (!session) {
-    return { ok: false, error: 'Unauthorized.' };
-  }
-
-  const parsed = createVenueSchema.safeParse({
-    name: formValue(formData, 'name'),
-    address: formValue(formData, 'address'),
-    sections: parseSections(formData),
-  });
-
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid venue details.' };
-  }
-
-  const result = await createVenue(parsed.data);
-
-  if (!result.ok) {
-    return { ok: false, error: result.error };
-  }
-
-  revalidatePath('/admin/venues');
-  return { ok: true, venueId: result.data.venueId, seatCount: result.data.seatCount };
-}
-
 export type DeleteVenueState = {
   ok: boolean;
   error?: string;

@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import type { CreateVenueInput } from './validation/venues';
+import { Prisma } from '@prisma/client';
 
 type ActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -17,9 +18,9 @@ export async function createVenue(
   // Guard against duplicate (row, number, section) combos before hitting
   // the database — cheaper and clearer than letting the @@unique
   // constraint on VenueSeat reject the whole batch with a raw DB error.
-  const seenKeys = new Set<string>();
+ const seenKeys = new Set<string>();
   for (const seat of seats) {
-    const key = `${seat.row}|${seat.number}|${seat.section}`;
+    const key = JSON.stringify([seat.row, seat.number, seat.section]);
     if (seenKeys.has(key)) {
       return {
         ok: false,
@@ -48,6 +49,8 @@ export async function createVenue(
   }
 }
 
+
+
 export async function deleteVenue(venueId: string): Promise<ActionResult> {
   const eventCount = await prisma.event.count({ where: { venueId } });
 
@@ -64,6 +67,12 @@ export async function deleteVenue(venueId: string): Promise<ActionResult> {
     await prisma.venue.delete({ where: { id: venueId } });
     return { ok: true, data: undefined };
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      return {
+        ok: false,
+        error: "Can't delete this venue — it still has events using it. Remove those events first.",
+      };
+    }
     console.error('Failed to delete venue', err);
     return { ok: false, error: 'Something went wrong deleting the venue.' };
   }

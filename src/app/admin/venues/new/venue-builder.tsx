@@ -7,9 +7,12 @@ import { buildSectionColorMap } from '@/lib/section-colors';
 import { createVenueAction, type VenueActionState } from '@/lib/actions/venues';
 
 type RowDraft = {
+  id: string;
   label: string;
-  seatCount: number;
+  seatCount: number | null;
 };
+
+
 
 function defaultRowLabel(index: number): string {
   let label = '';
@@ -21,13 +24,18 @@ function defaultRowLabel(index: number): string {
   return label;
 }
 
-function seatKey(rowLabel: string, seatNumber: number): string {
-  return `${rowLabel}__${seatNumber}`;
+let rowIdCounter = 0;
+function nextRowId(): string {
+  rowIdCounter += 1;
+  return `row-${rowIdCounter}`;
+}
+
+function seatKey(rowId: string, seatNumber: number): string {
+  return `${rowId}__${seatNumber}`;
 }
 
 export function VenueBuilder() {
-  const [rows, setRows] = useState<RowDraft[]>([{ label: 'A', seatCount: 8 }]);
-
+  const [rows, setRows] = useState<RowDraft[]>([{ id: nextRowId(), label: 'A', seatCount: 8 }]);
   // Committed assignments: seatKey -> section name. This is the real,
   // saved state of the venue-in-progress.
   const [assignments, setAssignments] = useState<Record<string, string>>({});
@@ -51,20 +59,54 @@ export function VenueBuilder() {
   }, [result, router]);
 
   function addRow() {
-    setRows((prev) => [...prev, { label: defaultRowLabel(prev.length), seatCount: 8 }]);
+    setRows((prev) => [
+      ...prev,
+      { id: nextRowId(), label: defaultRowLabel(prev.length), seatCount: 8 },
+    ]);
   }
 
-  function removeRow(index: number) {
-    setRows((prev) => prev.filter((_, i) => i !== index));
+  function removeRow(rowId: string) {
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+
+    const prefix = `${rowId}__`;
+    setAssignments((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (key.startsWith(prefix)) delete next[key];
+      }
+      return next;
+    });
+    setSelectedSeats((prev) => {
+      const next = new Set(prev);
+      for (const key of next) {
+        if (key.startsWith(prefix)) next.delete(key);
+      }
+      return next;
+    });
   }
 
-  function updateRowLabel(index: number, label: string) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, label } : r)));
+  function updateRowLabel(rowId: string, label: string) {
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, label } : r)));
   }
 
-  function updateRowSeatCount(index: number, seatCount: number) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, seatCount } : r)));
-  }
+
+    function updateRowSeatCount(rowId: string, rawValue: string) {
+    const trimmed = rawValue.trim();
+
+    if (trimmed === '') {
+      setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, seatCount: null } : r)));
+      return;
+    }
+
+    const parsed = Number(trimmed);
+    const isValidInteger = Number.isInteger(parsed) && parsed >= 1 && parsed <= 100;
+
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === rowId ? { ...r, seatCount: isValidInteger ? parsed : r.seatCount } : r
+      )
+    );
+    }
 
   function toggleSeat(key: string) {
     setSelectedSeats((prev) => {
@@ -95,6 +137,7 @@ export function VenueBuilder() {
   }
 
   async function handleSubmit() {
+
     if (!name.trim() || !address.trim()) {
       setResult({ ok: false, error: 'Venue name and address are required.' });
       return;
@@ -104,13 +147,27 @@ export function VenueBuilder() {
       return;
     }
 
+    const incompleteRow = rows.find((r) => r.seatCount === null);
+    if (incompleteRow) {
+      setResult({ ok: false, error: 'Every row needs a valid number of seats (1–100).' });
+      return;
+    }
+
+    const labels = rows.map((r) => r.label.trim());
+    const uniqueLabels = new Set(labels);
+    
+    if (uniqueLabels.size !== labels.length) {
+      setResult({ ok: false, error: 'Row labels must be unique.' });
+      return;
+    }
+
     // Flatten the grid into a flat seat list, defaulting any seat that
     // never got explicitly assigned to section "G".
     const seats = rows.flatMap((row) =>
-      Array.from({ length: row.seatCount || 0 }).map((_, seatIndex) => {
-        const key = seatKey(row.label, seatIndex + 1);
+      Array.from({ length: row.seatCount ?? 0 }).map((_, seatIndex) => {
+        const key = seatKey(row.id, seatIndex + 1);
         return {
-          row: row.label,
+          row: row.label, // display label is still what actually gets saved as the seat's row
           number: String(seatIndex + 1),
           section: assignments[key] ?? 'G',
         };
@@ -118,12 +175,17 @@ export function VenueBuilder() {
     );
 
     setIsSubmitting(true);
-    const actionResult = await createVenueAction({ name, address, seats });
-    setIsSubmitting(false);
-    setResult(actionResult);
+    try {
+      const actionResult = await createVenueAction({ name, address, seats });
+      setResult(actionResult);
+    } catch {
+      setResult({ ok: false, error: 'Unable to create the venue. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  const totalSeats = rows.reduce((sum, r) => sum + (r.seatCount || 0), 0);
+  const totalSeats = rows.reduce((sum, r) => sum + (r.seatCount ?? 0), 0);
 
   // Every assigned section name, plus "G" so it's always in the palette
   // even before anything is explicitly assigned to it.
@@ -164,12 +226,12 @@ export function VenueBuilder() {
           </span>
         </div>
 
-        {rows.map((row, index) => (
-          <div key={index} className="flex items-center gap-3 mb-2">
+        {rows.map((row) => (
+          <div key={row.id} className="flex items-center gap-3 mb-2">
             <input
               type="text"
               value={row.label}
-              onChange={(e) => updateRowLabel(index, e.target.value)}
+              onChange={(e) => updateRowLabel(row.id, e.target.value)}
               className="flex-1 border border-gray-300 rounded-md px-3 py-2"
               placeholder="Row label (e.g. A)"
             />
@@ -177,15 +239,15 @@ export function VenueBuilder() {
               type="number"
               min={1}
               max={100}
-              value={row.seatCount}
-              onChange={(e) => updateRowSeatCount(index, Number(e.target.value))}
+              value={row.seatCount ?? ''}
+              onChange={(e) => updateRowSeatCount(row.id, e.target.value)}
               className="flex-1 border border-gray-300 rounded-md px-3 py-2"
               placeholder="Seats in this row"
             />
             {rows.length > 1 && (
               <button
                 type="button"
-                onClick={() => removeRow(index)}
+                onClick={() => removeRow(row.id)}
                 className="text-xs text-gray-400 hover:text-red-600 px-2"
               >
                 Remove
@@ -231,12 +293,12 @@ export function VenueBuilder() {
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-bold mb-4">Seat map</h2>
         <div className="flex flex-col items-center gap-2 mb-4">
-          {rows.map((row, rowIndex) => (
-            <div key={rowIndex} className="flex items-center gap-2">
+          {rows.map((row) => (
+            <div key={row.id} className="flex items-center gap-2">
               <span className="w-8 text-xs text-gray-500 text-right">{row.label}</span>
               <div className="flex gap-1">
-                {Array.from({ length: row.seatCount || 0 }).map((_, seatIndex) => {
-                  const key = seatKey(row.label, seatIndex + 1);
+                {Array.from({ length: row.seatCount ?? 0 }).map((_, seatIndex) => {
+                  const key = seatKey(row.id, seatIndex + 1);
                   const isSelected = selectedSeats.has(key);
                   const assignedSection = assignments[key];
                   const backgroundColor = assignedSection
@@ -248,6 +310,10 @@ export function VenueBuilder() {
                       key={seatIndex}
                       type="button"
                       onClick={() => toggleSeat(key)}
+                      aria-pressed={isSelected}
+                      aria-label={`${row.label} seat ${seatIndex + 1}, ${
+                        assignedSection ?? 'unassigned; defaults to G'
+                      }`}
                       title={`${row.label}${seatIndex + 1}${
                         assignedSection ? ` — ${assignedSection}` : ''
                       }`}
