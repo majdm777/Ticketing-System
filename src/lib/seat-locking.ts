@@ -237,6 +237,7 @@ export async function createGuestBooking(params: {
           eventId,
           venueSeatId,
           status: SeatStatus.AVAILABLE,
+          event: { status: { not: EventStatus.CANCELED } },
         },
         data: {
           status: SeatStatus.BOOKED,

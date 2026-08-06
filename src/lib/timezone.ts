@@ -1,8 +1,17 @@
 export const SCHEDULING_TIMEZONE = process.env.SCHEDULING_TIMEZONE || 'Asia/Beirut';
 
-function tzOffset(instant: Date): number {
+type WallClock = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+function wallClockInTz(instant: Date, timeZone: string): WallClock {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: SCHEDULING_TIMEZONE,
+    timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -12,58 +21,81 @@ function tzOffset(instant: Date): number {
     hourCycle: 'h23',
   }).formatToParts(instant);
   const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return {
+    year: part('year'),
+    month: part('month'),
+    day: part('day'),
+    hour: part('hour'),
+    minute: part('minute'),
+    second: part('second'),
+  };
+}
+
+function tzOffset(instant: Date, timeZone: string): number {
+  const wall = wallClockInTz(instant, timeZone);
   const wallAsUtc = Date.UTC(
-    part('year'),
-    part('month') - 1,
-    part('day'),
-    part('hour'),
-    part('minute'),
-    part('second'),
+    wall.year,
+    wall.month - 1,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second,
   );
   return instant.getTime() - wallAsUtc;
 }
 
-export function parseScheduledTime(value: string): Date {
+export function parseScheduledTime(value: string, timeZone = SCHEDULING_TIMEZONE): Date {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) {
     return new Date(Number.NaN);
   }
-  const wallAsUtc = Date.UTC(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    Number(match[4]),
-    Number(match[5]),
-    Number(match[6] ?? '0'),
-  );
-  return new Date(wallAsUtc + tzOffset(new Date(wallAsUtc)));
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6] ?? '0');
+
+  const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  const utcDate = new Date(wallAsUtc);
+  if (
+    utcDate.getUTCFullYear() !== year ||
+    utcDate.getUTCMonth() + 1 !== month ||
+    utcDate.getUTCDate() !== day ||
+    utcDate.getUTCHours() !== hour ||
+    utcDate.getUTCMinutes() !== minute ||
+    utcDate.getUTCSeconds() !== second
+  ) {
+    return new Date(Number.NaN);
+  }
+  return new Date(wallAsUtc + tzOffset(utcDate, timeZone));
 }
 
-export function startOfTomorrow(now = new Date()): Date {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: SCHEDULING_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const year = part('year');
-  const month = part('month');
-  const day = part('day');
-  const noonProbe = new Date(Date.UTC(year, month - 1, day + 1, 12));
-  const midnightUtc = Date.UTC(year, month - 1, day + 1);
-  return new Date(midnightUtc + tzOffset(noonProbe));
+export function startOfTomorrow(now = new Date(), timeZone = SCHEDULING_TIMEZONE): Date {
+  const today = wallClockInTz(now, timeZone);
+  const target = new Date(Date.UTC(today.year, today.month - 1, today.day + 1));
+  const targetYear = target.getUTCFullYear();
+  const targetMonth = target.getUTCMonth() + 1;
+  const targetDay = target.getUTCDate();
+
+  const naiveMidnight = target.getTime();
+  const candidate = new Date(naiveMidnight + tzOffset(new Date(naiveMidnight), timeZone));
+
+  for (let step = -6 * 60; step <= 36 * 60; step++) {
+    const instant = new Date(candidate.getTime() + step * 60_000);
+    const wall = wallClockInTz(instant, timeZone);
+    if (wall.year === targetYear && wall.month === targetMonth && wall.day === targetDay) {
+      return instant;
+    }
+  }
+  return candidate;
 }
 
-export function toLocalDateTimeInput(date: Date): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
-  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
+export function toLocalDateTimeInput(
+  date: Date,
+  timeZone = SCHEDULING_TIMEZONE,
+): string {
+  const wall = wallClockInTz(date, timeZone);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${wall.year}-${pad(wall.month)}-${pad(wall.day)}T${pad(wall.hour)}:${pad(wall.minute)}`;
 }
