@@ -14,6 +14,7 @@ const statusStyles: Record<EventStatus, string> = {
   DRAFT: 'bg-zinc-100 text-zinc-600',
   PUBLISHED: 'bg-emerald-100 text-emerald-700',
   CLOSED: 'bg-zinc-200 text-zinc-500',
+  CANCELED: 'bg-red-100 text-red-700',
 };
 
 export default async function AdminDashboardPage() {

@@ -16,12 +16,14 @@ enum EventStatus {
   DRAFT
   PUBLISHED
   CLOSED
+  CANCELED
 }
 
 enum SeatStatus {
   AVAILABLE
   PENDING
   BOOKED
+  CANCELED
 }
 
 enum CaseType {

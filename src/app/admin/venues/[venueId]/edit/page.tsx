@@ -25,7 +25,23 @@ export default async function EditVenuePage({
         Update {venue.name} and its seating sections — seats are regenerated automatically.
       </p>
 
-      {venue.hasEvents ? (
+      {venue.hasUnsupportedLayout ? (
+        <div>
+          <div
+            role="alert"
+            className="bg-red-50 border border-red-200 text-red-700 rounded-md p-4 mb-4 text-sm"
+          >
+            This venue&apos;s layout isn&apos;t supported by the editor — some seats in different
+            sections share the same row and seat number. Recreate the venue instead.
+          </div>
+          <Link
+            href="/admin/venues"
+            className="inline-flex items-center min-h-11 bg-black text-white px-4 py-2 rounded-md font-medium hover:bg-gray-800"
+          >
+            Back to venues
+          </Link>
+        </div>
+      ) : venue.hasEvents ? (
         <div>
           <div
             role="alert"

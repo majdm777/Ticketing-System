@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react';
 
+import { formatPrice } from '@/lib/currency';
 import {
   createGuestBookingAction,
   type BookingActionState,
@@ -61,7 +62,7 @@ export function GuestBookingForm({
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
               {group.section}
               <span className="ml-2 normal-case tracking-normal text-zinc-400">
-                · {group.price}
+                · {formatPrice(group.price)}
               </span>
             </h2>
             <div className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3 sm:p-4">

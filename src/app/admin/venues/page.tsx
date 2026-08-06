@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { formatPrice } from '@/lib/currency';
 import { prisma } from '@/lib/prisma';
 import { VenueDeleteButton } from './venue-delete-button';
 
@@ -72,7 +73,7 @@ export default async function VenuesPage() {
                       key={section.name}
                       className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-600"
                     >
-                      {section.name} · {section.price}
+                      {section.name} · {formatPrice(section.price)}
                     </span>
                   ))}
                 </div>

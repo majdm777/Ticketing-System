@@ -178,6 +178,7 @@ export type VenueForEdit = {
   name: string;
   address: string;
   hasEvents: boolean;
+  hasUnsupportedLayout: boolean;
   builderData: {
     name: string;
     address: string;
@@ -213,6 +214,20 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
 
   if (!venue) {
     return null;
+  }
+
+  // A layout is unsupported when two seats in different sections share the
+  // same (row, number) coordinate. The editor can't represent that, so flag it
+  // instead of silently overwriting assignments or undercounting seats.
+  const seenCoordinates = new Set<string>();
+  let hasUnsupportedLayout = false;
+  for (const seat of venue.seats) {
+    const key = `${seat.row}|${seat.number}`;
+    if (seenCoordinates.has(key)) {
+      hasUnsupportedLayout = true;
+      break;
+    }
+    seenCoordinates.add(key);
   }
 
   const sectionPrices: Record<string, string> = {};
@@ -264,6 +279,7 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
     name: venue.name,
     address: venue.address,
     hasEvents: venue._count.events > 0,
+    hasUnsupportedLayout,
     builderData: {
       name: venue.name,
       address: venue.address,

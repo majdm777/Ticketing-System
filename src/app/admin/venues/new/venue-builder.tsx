@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { buildSectionColorMap } from '@/lib/section-colors';
+import { formatPrice } from '@/lib/currency';
 import {
   createVenueAction,
   updateVenueAction,
@@ -37,10 +38,22 @@ function defaultRowLabel(index: number): string {
   return label;
 }
 
-let rowIdCounter = 0;
-function nextRowId(): string {
-  rowIdCounter += 1;
-  return `row-${rowIdCounter}`;
+function nextAvailableLabel(rows: RowDraft[]): string {
+  const used = new Set(rows.map((row) => row.label));
+  let index = 0;
+  while (used.has(defaultRowLabel(index))) {
+    index += 1;
+  }
+  return defaultRowLabel(index);
+}
+
+function maxRowIdNumber(rows: { id: string }[]): number {
+  let max = 0;
+  for (const row of rows) {
+    const match = /^row-(\d+)$/.exec(row.id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max;
 }
 
 function seatKey(rowId: string, seatNumber: number): string {
@@ -61,10 +74,12 @@ export function VenueBuilder({
   initialData?: VenueBuilderInitialData;
   venueId?: string;
 }) {
+  const rowIdCounterRef = useRef(maxRowIdNumber(initialData?.rows ?? []));
+
   const [rows, setRows] = useState<RowDraft[]>(
     initialData
       ? initialData.rows.map((r) => ({ id: r.id, label: r.label, seatCount: r.seatCount }))
-      : [{ id: nextRowId(), label: 'A', seatCount: 8 }]
+      : [{ id: 'row-initial', label: 'A', seatCount: 8 }]
   );
   // Committed assignments: seatKey -> section name. This is the real,
   // saved state of the venue-in-progress.
@@ -102,9 +117,11 @@ export function VenueBuilder({
   }, [result, router]);
 
   function addRow() {
+    const id = `row-${rowIdCounterRef.current + 1}`;
+    rowIdCounterRef.current += 1;
     setRows((prev) => [
       ...prev,
-      { id: nextRowId(), label: defaultRowLabel(prev.length), seatCount: 8 },
+      { id, label: nextAvailableLabel(prev), seatCount: 8 },
     ]);
   }
 
@@ -263,7 +280,7 @@ export function VenueBuilder({
       if (price === null) {
         setResult({
           ok: false,
-          error: `Section "${sectionName}" needs a price (a whole number above zero).`,
+          error: `Section "${sectionName}" needs a price (a whole-dollar amount above zero).`,
         });
         return;
       }
@@ -386,14 +403,20 @@ export function VenueBuilder({
           <input
             type="number"
             min={1}
+            step={1}
             value={draftSectionPrice}
             onChange={(e) => setDraftSectionPrice(e.target.value)}
             inputMode="numeric"
-            aria-label="Section price"
+            aria-label="Section price in dollars"
             className="w-full border border-gray-300 rounded-md px-3 py-2"
-            placeholder="Price (e.g. 250000)"
+            placeholder="Price in $ (e.g. 3)"
           />
         </div>
+        {validPrice(draftSectionPrice) !== null ? (
+          <p className="mt-1 text-xs text-gray-500">
+            Equivalent: {formatPrice(validPrice(draftSectionPrice)!)}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={assignSelectedToSection}
@@ -404,7 +427,7 @@ export function VenueBuilder({
         </button>
         {draftSectionName.trim() && selectedSeats.size > 0 && validPrice(draftSectionPrice) === null ? (
           <p role="alert" className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            Add a price for section &quot;{draftSectionName.trim()}&quot; (a whole number above zero) before assigning seats.
+            Add a price for section &quot;{draftSectionName.trim()}&quot; (a whole-dollar amount above zero) before assigning seats.
           </p>
         ) : null}
         <p className="text-sm text-gray-500 mt-3">
@@ -419,12 +442,18 @@ export function VenueBuilder({
             id="g-section-price"
             type="number"
             min={1}
+            step={1}
             value={gPrice}
             onChange={(e) => setGPrice(e.target.value)}
             inputMode="numeric"
             className="w-40 border border-gray-300 rounded-md px-3 py-2"
-            placeholder="Price (e.g. 100000)"
+            placeholder="Price in $ (e.g. 2)"
           />
+          {validPrice(gPrice) !== null ? (
+            <span className="text-xs text-gray-500">
+              {formatPrice(validPrice(gPrice)!)}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -475,6 +504,7 @@ export function VenueBuilder({
           <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-200">
             {sectionNames.map((sectionName) => {
               const price = sectionName === 'G' ? gPrice : (sectionPrices[sectionName] ?? '');
+              const priceNumber = validPrice(price);
               return (
                 <div key={sectionName} className="flex items-center gap-1.5 text-sm text-gray-600">
                   <span
@@ -482,7 +512,9 @@ export function VenueBuilder({
                     style={{ backgroundColor: colorMap.get(sectionName) }}
                   />
                   {sectionName}
-                  {price ? <span className="text-gray-400">· {price}</span> : null}
+                  {priceNumber !== null ? (
+                    <span className="text-gray-400">· {formatPrice(priceNumber)}</span>
+                  ) : null}
                 </div>
               );
             })}
