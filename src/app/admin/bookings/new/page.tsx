@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { EventStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 
@@ -100,13 +101,19 @@ export default async function NewGuestBookingPage({
       </div>
 
       {event ? (
-        <>
-          <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-5">
-            <h2 className="font-semibold tracking-tight">{event.name}</h2>
-            <p className="text-sm leading-6 text-zinc-600">{event.venue.name}</p>
-          </section>
-          <GuestBookingForm eventId={event.id} seatGroups={groupSeats(seats)} />
-        </>
+        event.status === EventStatus.CANCELED ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
+            &quot;{event.name}&quot; was canceled, so guest booking is unavailable.
+          </p>
+        ) : (
+          <>
+            <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-5">
+              <h2 className="font-semibold tracking-tight">{event.name}</h2>
+              <p className="text-sm leading-6 text-zinc-600">{event.venue.name}</p>
+            </section>
+            <GuestBookingForm eventId={event.id} seatGroups={groupSeats(seats)} />
+          </>
+        )
       ) : (
         <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">
           Open guest booking from a selected event on the bookings page.

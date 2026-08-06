@@ -1,4 +1,4 @@
-import { BookingStatus, CaseType, Prisma, SeatStatus } from '@prisma/client';
+import { BookingStatus, CaseType, EventStatus, Prisma, SeatStatus } from '@prisma/client';
 
 import { env } from './env';
 import { prisma } from './prisma';
@@ -224,11 +224,20 @@ export async function createGuestBooking(params: {
 
   try {
     return await prisma.$transaction(async (tx) => {
+      const event = await tx.event.findUnique({
+        where: { id: eventId },
+        select: { status: true },
+      });
+      if (!event || event.status === EventStatus.CANCELED) {
+        return { ok: false, error: 'Guest booking is unavailable for canceled events.' };
+      }
+
       const seatResult = await tx.eventSeat.updateMany({
         where: {
           eventId,
           venueSeatId,
           status: SeatStatus.AVAILABLE,
+          event: { status: { not: EventStatus.CANCELED } },
         },
         data: {
           status: SeatStatus.BOOKED,

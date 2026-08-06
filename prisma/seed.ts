@@ -8,8 +8,8 @@ import {
 
 const prisma = new PrismaClient()
 
-function buildSeats(sectionId: string, rows: number, seatsPerRow: number) {
-  const rowsArr = 'ABCDEFGH'.slice(0, rows).split('')
+function buildSeats(sectionId: string, rows: number, seatsPerRow: number, startRow = 0) {
+  const rowsArr = 'ABCDEFGH'.slice(startRow, startRow + rows).split('')
   const seats: { row: string; number: string; sectionId: string }[] = []
   for (const row of rowsArr) {
     for (let n = 1; n <= seatsPerRow; n++) {
@@ -81,19 +81,19 @@ async function main() {
     'Grand Hall',
     '123 Main St, Springfield',
     [
-      { name: 'Floor', price: 300000 },
-      { name: 'Balcony', price: 200000 },
+      { name: 'Floor', price: 3 },
+      { name: 'Balcony', price: 2 },
     ],
     (sectionIdByName) => [
-      ...buildSeats(sectionIdByName.get('Floor')!, 3, 8),
-      ...buildSeats(sectionIdByName.get('Balcony')!, 2, 6),
+      ...buildSeats(sectionIdByName.get('Floor')!, 3, 8, 0),
+      ...buildSeats(sectionIdByName.get('Balcony')!, 2, 6, 3),
     ],
   )
 
   const venueB = await createVenueWithSections(
     'The Loft',
     '456 Oak Ave, Riverside',
-    [{ name: 'General Admission', price: 150000 }],
+    [{ name: 'General Admission', price: 2 }],
     (sectionIdByName) => buildSeats(sectionIdByName.get('General Admission')!, 4, 5),
   )
 

@@ -8,7 +8,7 @@ const seatSchema = z.object({
 
 const sectionSchema = z.object({
   name: z.string().trim().min(1, 'Section name is required.').max(60),
-  price: z.number().int('Section price must be a whole number.').positive('Section price must be greater than zero.'),
+  price: z.number().int('Section price must be a whole-dollar amount.').positive('Section price must be greater than zero.'),
 });
 
 export const createVenueSchema = z.object({
