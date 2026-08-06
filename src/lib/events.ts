@@ -1,4 +1,4 @@
-import { BookingStatus, EventStatus, SeatStatus } from '@prisma/client';
+import { BookingStatus, EventStatus, Prisma, SeatStatus } from '@prisma/client';
 
 import { prisma } from './prisma';
 
@@ -24,24 +24,28 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
     include: { venue: { select: { id: true, name: true } } },
   });
 
+  const eventIds = events.map((event) => event.id);
+
   const seatCountGroups = await prisma.eventSeat.groupBy({
     by: ['eventId', 'status'],
+    where: eventIds.length > 0 ? { eventId: { in: eventIds } } : undefined,
     _count: { _all: true },
   });
 
-  const confirmedBookings = await prisma.booking.findMany({
-    where: { status: BookingStatus.CONFIRMED },
-    select: {
-      eventId: true,
-      eventSeat: {
-        select: {
-          venueSeat: {
-            select: { section: { select: { price: true } } },
-          },
-        },
-      },
-    },
-  });
+  const revenueGroups =
+    eventIds.length === 0
+      ? []
+      : await prisma.$queryRaw<{ eventId: string; revenue: number }[]>(
+          Prisma.sql`
+            SELECT b."eventId" AS "eventId", COALESCE(SUM(s."price"), 0)::int AS "revenue"
+            FROM "Booking" b
+            JOIN "EventSeat" es ON es."id" = b."eventSeatId" AND es."eventId" = b."eventId"
+            JOIN "VenueSeat" vse ON vse."id" = es."venueSeatId" AND vse."venueId" = es."venueId"
+            JOIN "VenueSection" s ON s."id" = vse."sectionId" AND s."venueId" = vse."venueId"
+            WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."eventId" IN (${Prisma.join(eventIds)})
+            GROUP BY b."eventId"
+          `,
+        );
 
   const seatCountsByEvent = new Map<string, Partial<Record<SeatStatus, number>>>();
   for (const group of seatCountGroups) {
@@ -51,12 +55,8 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
   }
 
   const revenueByEvent = new Map<string, number>();
-  for (const booking of confirmedBookings) {
-    const current = revenueByEvent.get(booking.eventId) ?? 0;
-    revenueByEvent.set(
-      booking.eventId,
-      current + booking.eventSeat.venueSeat.section.price,
-    );
+  for (const group of revenueGroups) {
+    revenueByEvent.set(group.eventId, group.revenue);
   }
 
   const now = new Date();

@@ -1,20 +1,12 @@
 import { BookingStatus } from '@prisma/client';
 import Link from 'next/link';
 
+import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 
 import { PendingBookingActions } from './pending-booking-actions';
 
 const statusOptions = ['all', ...Object.values(BookingStatus)] as const;
-
-function formatDate(date: Date | null) {
-  return date
-    ? new Intl.DateTimeFormat('en', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(date)
-    : '-';
-}
 
 export default async function AdminBookingsPage({
   searchParams,

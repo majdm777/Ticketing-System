@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 
 import { getAdminSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parseScheduledTime, startOfTomorrow } from '@/lib/timezone';
 import { createEventSchema, eventIdSchema } from '@/lib/validation/events';
 
 function slugify(name: string) {
@@ -18,20 +19,81 @@ function slugify(name: string) {
 }
 
 async function resolveUniqueSlug(base: string) {
+  const existing = await prisma.event.findMany({
+    where: { slug: { startsWith: base } },
+    select: { slug: true },
+  });
+  const taken = new Set(existing.map((event) => event.slug));
+
   let slug = base;
   let n = 2;
-  while (n <= 50) {
-    const existing = await prisma.event.findUnique({
-      where: { slug },
-      select: { id: true },
-    });
-    if (!existing) {
-      return slug;
-    }
+  while (taken.has(slug) && n <= 50) {
     slug = `${base}-${n}`;
     n += 1;
   }
-  return `${base}-${Date.now().toString(36)}`;
+  return taken.has(slug) ? `${base}-${Date.now().toString(36)}` : slug;
+}
+
+function isUniqueSlugError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002' &&
+    'meta' in error &&
+    Array.isArray((error as { meta?: { target?: unknown } }).meta?.target) &&
+    ((error as { meta?: { target?: unknown[] } }).meta?.target ?? []).includes('slug')
+  );
+}
+
+const EVENT_SEAT_CLONE_TIMEOUT_MS = 15_000;
+
+class EventNotPublishedError extends Error {
+  constructor() {
+    super('Event is not published.');
+    this.name = 'EventNotPublishedError';
+  }
+}
+
+async function createEventWithSeats(params: {
+  venueId: string;
+  name: string;
+  startsAt: Date;
+  slug: string;
+}) {
+  const { venueId, name, startsAt, slug } = params;
+
+  return prisma.$transaction(
+    async (tx) => {
+      const event = await tx.event.create({
+        data: {
+          venueId,
+          name,
+          startsAt,
+          status: EventStatus.DRAFT,
+          slug,
+        },
+        select: { id: true },
+      });
+
+      const venueSeats = await tx.venueSeat.findMany({
+        where: { venueId },
+        select: { id: true },
+      });
+
+      if (venueSeats.length > 0) {
+        await tx.eventSeat.createMany({
+          data: venueSeats.map((seat) => ({
+            eventId: event.id,
+            venueSeatId: seat.id,
+            venueId,
+            status: SeatStatus.AVAILABLE,
+          })),
+        });
+      }
+    },
+    { timeout: EVENT_SEAT_CLONE_TIMEOUT_MS },
+  );
 }
 
 export type EventActionState = {
@@ -61,16 +123,24 @@ export async function cancelEventAction(formData: FormData): Promise<EventAction
   try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, status: true },
+      select: { id: true, startsAt: true },
     });
     if (!event) {
       return { ok: false, error: 'Event not found.' };
     }
-    if (event.status !== EventStatus.PUBLISHED) {
-      return { ok: false, error: 'Only published events can be canceled.' };
+    if (event.startsAt <= new Date()) {
+      return { ok: false, error: 'Finished events cannot be canceled.' };
     }
 
     await prisma.$transaction(async (tx) => {
+      const eventResult = await tx.event.updateMany({
+        where: { id: eventId, status: EventStatus.PUBLISHED },
+        data: { status: EventStatus.CANCELED },
+      });
+      if (eventResult.count === 0) {
+        throw new EventNotPublishedError();
+      }
+
       await tx.eventSeat.updateMany({
         where: { eventId },
         data: {
@@ -90,17 +160,16 @@ export async function cancelEventAction(formData: FormData): Promise<EventAction
         },
         data: { status: BookingStatus.CANCELLED, cancelledAt: new Date() },
       });
-
-      await tx.event.update({
-        where: { id: eventId },
-        data: { status: EventStatus.CANCELED },
-      });
     });
 
     revalidatePath('/admin/events');
     revalidatePath('/admin/bookings');
+    revalidatePath('/admin');
     return { ok: true };
   } catch (err) {
+    if (err instanceof EventNotPublishedError) {
+      return { ok: false, error: 'Only published events can be canceled.' };
+    }
     console.error('Failed to cancel event', err);
     return { ok: false, error: 'Something went wrong canceling the event.' };
   }
@@ -125,16 +194,14 @@ export async function createEventAction(
   }
 
   const { name, startsAt, venueId } = parsed.data;
-  const startsAtDate = new Date(startsAt);
+  const startsAtDate = parseScheduledTime(startsAt);
   if (Number.isNaN(startsAtDate.getTime())) {
     return { ok: false, error: 'Event time is required.' };
   }
   if (startsAtDate.getTime() <= Date.now()) {
     return { ok: false, error: 'Event time must be in the future.' };
   }
-  const now = new Date();
-  const earliest = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  if (startsAtDate.getTime() < earliest.getTime()) {
+  if (startsAtDate.getTime() < startOfTomorrow().getTime()) {
     return { ok: false, error: 'Event time must be tomorrow or later.' };
   }
 
@@ -147,36 +214,18 @@ export async function createEventAction(
       return { ok: false, error: 'Venue not found.' };
     }
 
-    const slug = await resolveUniqueSlug(slugify(name));
+    const baseSlug = slugify(name);
+    let slug = await resolveUniqueSlug(baseSlug);
 
-    await prisma.$transaction(async (tx) => {
-      const event = await tx.event.create({
-        data: {
-          venueId,
-          name,
-          startsAt: startsAtDate,
-          status: EventStatus.DRAFT,
-          slug,
-        },
-        select: { id: true },
-      });
-
-      const venueSeats = await tx.venueSeat.findMany({
-        where: { venueId },
-        select: { id: true },
-      });
-
-      if (venueSeats.length > 0) {
-        await tx.eventSeat.createMany({
-          data: venueSeats.map((seat) => ({
-            eventId: event.id,
-            venueSeatId: seat.id,
-            venueId,
-            status: SeatStatus.AVAILABLE,
-          })),
-        });
+    try {
+      await createEventWithSeats({ venueId, name, startsAt: startsAtDate, slug });
+    } catch (error) {
+      if (!isUniqueSlugError(error)) {
+        throw error;
       }
-    });
+      slug = `${baseSlug}-${Date.now().toString(36)}`;
+      await createEventWithSeats({ venueId, name, startsAt: startsAtDate, slug });
+    }
 
     revalidatePath('/admin/events');
     revalidatePath('/admin');
@@ -206,7 +255,7 @@ export async function publishEventAction(formData: FormData): Promise<EventActio
   try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, startsAt: true },
     });
     if (!event) {
       return { ok: false, error: 'Event not found.' };
@@ -214,13 +263,20 @@ export async function publishEventAction(formData: FormData): Promise<EventActio
     if (event.status !== EventStatus.DRAFT) {
       return { ok: false, error: 'Only draft events can be published.' };
     }
+    if (event.startsAt <= new Date()) {
+      return { ok: false, error: 'Past events cannot be published.' };
+    }
 
-    await prisma.event.update({
-      where: { id: eventId },
+    const result = await prisma.event.updateMany({
+      where: { id: eventId, status: EventStatus.DRAFT },
       data: { status: EventStatus.PUBLISHED },
     });
+    if (result.count === 0) {
+      return { ok: false, error: 'Only draft events can be published.' };
+    }
 
     revalidatePath('/admin/events');
+    revalidatePath('/admin');
     return { ok: true };
   } catch (err) {
     console.error('Failed to publish event', err);

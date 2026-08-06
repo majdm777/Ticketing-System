@@ -3,17 +3,11 @@ import Link from 'next/link';
 
 import { formatPrice } from '@/lib/currency';
 import { getEventsWithStats, type EventWithStats } from '@/lib/events';
+import { formatDate } from '@/lib/format';
 
 import { CopyLinkButton } from './copy-link-button';
 import { EventActions } from './event-actions';
 import { EventSection } from './event-section';
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat('en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
-}
 
 const statusStyles: Record<EventStatus, string> = {
   DRAFT: 'bg-zinc-100 text-zinc-600',
@@ -128,13 +122,18 @@ export default async function AdminEventsPage() {
                       View bookings
                     </Link>
                     {event.isFinished || event.status === EventStatus.CANCELED ? (
-                      <span
-                        aria-disabled="true"
-                        title="Guest booking is disabled for finished or canceled events."
-                        className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center rounded-md border border-zinc-200 bg-zinc-100 px-4 text-sm font-medium text-zinc-400 sm:w-auto"
-                      >
-                        Book a guest
-                      </span>
+                      <>
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center rounded-md border border-zinc-200 bg-zinc-100 px-4 text-sm font-medium text-zinc-400 sm:w-auto"
+                        >
+                          Book a guest
+                        </button>
+                        <p className="w-full text-sm leading-6 text-zinc-500 sm:w-auto sm:self-center">
+                          Guest booking is unavailable for finished or canceled events.
+                        </p>
+                      </>
                     ) : (
                       <Link
                         href={`/admin/bookings/new?eventId=${event.id}`}

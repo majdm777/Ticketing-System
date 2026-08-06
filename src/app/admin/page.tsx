@@ -1,14 +1,8 @@
 import { BookingStatus, SeatStatus, type EventStatus } from '@prisma/client';
 import Link from 'next/link';
 
+import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat('en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
-}
 
 const statusStyles: Record<EventStatus, string> = {
   DRAFT: 'bg-zinc-100 text-zinc-600',

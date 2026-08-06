@@ -54,7 +54,7 @@ export function EventActions({
     });
   }
 
-  if (status === EventStatus.PUBLISHED) {
+  if (status === EventStatus.PUBLISHED && !isFinished) {
     return (
       <button
         type="button"

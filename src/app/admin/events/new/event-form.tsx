@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { createEventAction, type EventActionState } from '@/lib/actions/events';
 import { formatPrice } from '@/lib/currency';
+import { startOfTomorrow, toLocalDateTimeInput } from '@/lib/timezone';
 
 type VenueOption = {
   id: string;
@@ -16,17 +17,17 @@ type VenueOption = {
 
 const initialState: EventActionState = { ok: false };
 
-function minDateTimeInput() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T00:00`;
-}
-
 export function EventForm({ venues }: { venues: VenueOption[] }) {
   const [state, formAction, pending] = useActionState(createEventAction, initialState);
   const [search, setSearch] = useState('');
+  const timeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const input = timeInputRef.current;
+    if (input) {
+      input.min = toLocalDateTimeInput(startOfTomorrow());
+    }
+  }, []);
 
   const query = search.trim().toLowerCase();
   const filteredVenues = venues.filter(
@@ -35,7 +36,7 @@ export function EventForm({ venues }: { venues: VenueOption[] }) {
   );
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form action={formAction} id="event-form" className="space-y-8">
       <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-4 sm:p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Details</h2>
 
@@ -55,10 +56,10 @@ export function EventForm({ venues }: { venues: VenueOption[] }) {
         <label className="block space-y-2 text-sm font-medium">
           <span>Event time</span>
           <input
+            ref={timeInputRef}
             name="startsAt"
             type="datetime-local"
             required
-            min={minDateTimeInput()}
             className="w-full rounded-md border border-zinc-300 px-3 py-3 text-base outline-none focus:border-zinc-950"
           />
         </label>
@@ -131,7 +132,11 @@ export function EventForm({ venues }: { venues: VenueOption[] }) {
       </section>
 
       {state.error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p
+          id="event-form-error"
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
           {state.error}
         </p>
       ) : null}
@@ -139,6 +144,7 @@ export function EventForm({ venues }: { venues: VenueOption[] }) {
       <button
         type="submit"
         disabled={pending}
+        aria-describedby={state.error ? 'event-form-error' : undefined}
         className="inline-flex h-11 w-full items-center justify-center rounded-md bg-zinc-950 px-6 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-500 sm:w-auto"
       >
         {pending ? 'Creating...' : 'Create event'}

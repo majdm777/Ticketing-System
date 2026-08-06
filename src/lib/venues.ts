@@ -217,17 +217,51 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
   }
 
   // A layout is unsupported when two seats in different sections share the
-  // same (row, number) coordinate. The editor can't represent that, so flag it
-  // instead of silently overwriting assignments or undercounting seats.
+  // same (row, number) coordinate, or when any row's seat numbers are invalid,
+  // duplicated, or not contiguous starting at 1. The editor can't represent
+  // those, so flag it instead of silently overwriting assignments or
+  // undercounting seats.
   const seenCoordinates = new Set<string>();
+  const seatNumbersByRow = new Map<string, number[]>();
   let hasUnsupportedLayout = false;
   for (const seat of venue.seats) {
-    const key = `${seat.row}|${seat.number}`;
+    const number = Number(seat.number);
+    if (!Number.isInteger(number) || number < 1) {
+      hasUnsupportedLayout = true;
+      break;
+    }
+
+    const key = `${seat.row}|${number}`;
     if (seenCoordinates.has(key)) {
       hasUnsupportedLayout = true;
       break;
     }
     seenCoordinates.add(key);
+
+    const rowNumbers = seatNumbersByRow.get(seat.row) ?? [];
+    if (rowNumbers.includes(number)) {
+      hasUnsupportedLayout = true;
+      break;
+    }
+    rowNumbers.push(number);
+    seatNumbersByRow.set(seat.row, rowNumbers);
+  }
+
+  if (!hasUnsupportedLayout) {
+    for (const numbers of seatNumbersByRow.values()) {
+      numbers.sort((a, b) => a - b);
+      let expected = 1;
+      for (const number of numbers) {
+        if (number !== expected) {
+          hasUnsupportedLayout = true;
+          break;
+        }
+        expected += 1;
+      }
+      if (hasUnsupportedLayout) {
+        break;
+      }
+    }
   }
 
   const sectionPrices: Record<string, string> = {};
