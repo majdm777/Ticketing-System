@@ -68,7 +68,21 @@ export function parseScheduledTime(value: string, timeZone = SCHEDULING_TIMEZONE
   ) {
     return new Date(Number.NaN);
   }
-  return new Date(wallAsUtc + tzOffset(utcDate, timeZone));
+
+  const candidate = new Date(wallAsUtc + tzOffset(utcDate, timeZone));
+  const instant = new Date(wallAsUtc + tzOffset(candidate, timeZone));
+  const wall = wallClockInTz(instant, timeZone);
+  if (
+    wall.year !== year ||
+    wall.month !== month ||
+    wall.day !== day ||
+    wall.hour !== hour ||
+    wall.minute !== minute ||
+    wall.second !== second
+  ) {
+    return new Date(Number.NaN);
+  }
+  return instant;
 }
 
 export function startOfTomorrow(now = new Date(), timeZone = SCHEDULING_TIMEZONE): Date {
