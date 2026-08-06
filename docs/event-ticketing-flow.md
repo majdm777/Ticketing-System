@@ -36,6 +36,7 @@ dashboard to confirm bookings and manage events.
   - Confirm a "pay online with code" booking after matching the payment
   - Confirm a "pay at door" booking after verifying intent externally
   - Create an already-confirmed guest booking directly
+  - Cancel a published, not-yet-started event
   - Resend a ticket if delivery failed
 - Structural rules:
   - Single shared-password auth is intentional for this scope — there is
@@ -46,13 +47,17 @@ dashboard to confirm bookings and manage events.
 
 ```
 Venue
- └── VenueSeat (fixed layout, created once, reused across events)
-      └── EventSeat (cloned per Event, this is what actually gets locked)
-           └── Booking (the request/confirmation record for one hold)
+ └── VenueSection (pricing unit: one name + per-seat price in whole USD)
+      └── VenueSeat (fixed layout, created once, reused across events)
+           └── EventSeat (cloned per Event, this is what actually gets locked)
+                └── Booking (the request/confirmation record for one hold)
 ```
 
 - A `Venue`'s seat layout is authored once and reused as-is across every
   event held there — there is no per-event seat customization.
+- The layout is organized into `VenueSection`s: each section has a unique
+  name and a per-seat `price` in whole US dollars. Every `VenueSeat`
+  belongs to exactly one section and shares its price.
 - Creating an `Event` clones every `VenueSeat` into a matching `EventSeat`,
   all starting `AVAILABLE`. This clone is what booking logic actually
   touches — the original `VenueSeat` layout is never modified by bookings.
@@ -140,6 +145,12 @@ Venue
   may read or copy them by hand. Uniqueness is checked against all
   bookings ever made (not just active ones), with a bounded retry on
   collision.
+- Event cancellation: only a `PUBLISHED` event whose `startsAt` is still in
+  the future can be canceled. In one transaction the event goes
+  `PUBLISHED → CANCELED`, every `EventSeat` goes `→ CANCELED` with its hold
+  fields cleared (`bookedByName`, `bookedByPhone`, `referenceCode`,
+  `pendingSince`, `expiresAt`), and all `PENDING`/`CONFIRMED` bookings go
+  `→ CANCELLED`. Canceled events reject further guest bookings.
 
 ---
 
@@ -148,6 +159,7 @@ Venue
 ### Main Entities
 
 - Venue
+- VenueSection
 - VenueSeat
 - Event
 - EventSeat
@@ -159,11 +171,13 @@ Venue
 - DRAFT
 - PUBLISHED
 - CLOSED
+- CANCELED
 
 #### SeatStatus
 - AVAILABLE
 - PENDING
 - BOOKED
+- CANCELED
 
 #### CaseType
 - ONLINE_CODE

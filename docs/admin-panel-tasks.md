@@ -167,10 +167,11 @@ first — they are the source of truth for the domain and schema.
 
 **Behavior**
 1. Venue creation — form with venue name, address, and a seat-layout builder:
-   add sections, each with rows and seats-per-row (e.g. section "Floor",
-   3 rows, 8 seats/row). Creates the `Venue` and all `VenueSeat` rows in one
-   transaction. Seat uniqueness is `(venueId, row, number, section)` — a
-   duplicate layout must return a typed error.
+   add sections with a per-seat price in whole US dollars, each with rows and
+   seats-per-row (e.g. section "Floor", $5, 3 rows, 8 seats/row). Creates the
+   `Venue`, its `VenueSection`s, and all `VenueSeat` rows in one transaction.
+   Seat uniqueness is `(venueId, row, number, sectionId)` — a duplicate
+   layout must return a typed error.
 2. Event creation — form: pick an existing venue, name, description,
    `startsAt`, initial status (DRAFT/PUBLISHED). Slug: auto-generate from the
    name (e.g. `jazz-under-the-stars`); ensure uniqueness (append a suffix on
@@ -178,18 +179,21 @@ first — they are the source of truth for the domain and schema.
    of the chosen venue into an `EventSeat` (status `AVAILABLE`, `venueId` set)
    — matching the flow doc's Venue → VenueSeat → EventSeat hierarchy.
 3. Event list — show events with venue, date, status. Controls to change status
-   (DRAFT → PUBLISHED → CLOSED) via a Server Action using a guarded transition.
+   (DRAFT → PUBLISHED, PUBLISHED → CLOSED / CANCELED) via a Server Action using
+   a guarded transition. Canceling is only allowed for published events whose
+   `startsAt` is still in the future — it flips the event to `CANCELED`, every
+   seat to `CANCELED`, and PENDING/CONFIRMED bookings to `CANCELLED`.
    No booking logic here — that's A's slice.
 4. Server Actions — Zod-validate, run in transactions, return typed results.
 
 **Acceptance criteria**
 - [ ] Creating a venue with a layout creates all seats (count matches
       sections × rows × seats-per-row)
-- [ ] Duplicate `(row, number, section)` within a venue is rejected with a
+- [ ] Duplicate `(row, number, sectionId)` within a venue is rejected with a
       typed error
 - [ ] Creating an event auto-clones every venue seat into an `EventSeat` with
       the correct `venueId`, all `AVAILABLE`
-- [ ] Event slug is unique; DRAFT/PUBLISHED/CLOSED transitions work
+- [ ] Event slug is unique; DRAFT/PUBLISHED/CLOSED/CANCELED transitions work
 - [ ] `npx tsc --noEmit` and `npm run lint` pass
 - [ ] Commit B1 before moving to B2
 
