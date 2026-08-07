@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 
 import {
   SeatMap as VenueSeatMap,
@@ -8,8 +8,9 @@ import {
 } from '@/components/seat-map';
 import { createGuestBookingAction, type BookingActionState } from '@/lib/actions/bookings';
 import { buildSeatMapData, type SeatMapDataInput } from '@/lib/seat-map-data';
+import { MAX_GUEST_BOOKING_SEATS } from '@/lib/validation/bookings';
 
-const MAX_SEATS = 10;
+const MAX_SEATS = MAX_GUEST_BOOKING_SEATS;
 
 type Section = {
   name: string;
@@ -41,7 +42,10 @@ export function GuestBookingForm({
     setSelectedSeatIds((prev) => new Set([...prev].filter((id) => availableIds.has(id))));
   }
 
-  const { rows: dataRows, sectionColors } = buildSeatMapData(seats);
+  const { rows: dataRows, sectionColors } = useMemo(
+    () => buildSeatMapData(seats),
+    [seats],
+  );
 
   const rows: SeatMapRow[] = dataRows.map((dataRow) => ({
     label: dataRow.row,
@@ -163,6 +167,21 @@ export function GuestBookingForm({
       </aside>
 
       <div className="sticky bottom-0 z-10 -mx-4 border-t border-zinc-200 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:-mx-6 lg:hidden">
+        {state.error ? (
+          <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {state.error}
+          </p>
+        ) : null}
+        {state.ok ? (
+          <p className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            Guest booking created.
+          </p>
+        ) : null}
+        {atCap ? (
+          <p className="mb-3 text-xs text-zinc-500">
+            Seat limit reached — deselect a seat to pick another.
+          </p>
+        ) : null}
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium">
             {selectedSeatIds.size === 0

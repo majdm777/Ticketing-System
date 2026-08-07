@@ -475,7 +475,7 @@ export function VenueBuilder({
             type="button"
             onClick={markSelectedAsGap}
             disabled={selectedSeats.size === 0}
-            className="border border-gray-300 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 disabled:opacity-40"
+            className="min-h-[44px] border border-gray-300 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 disabled:opacity-40 sm:min-h-0"
           >
             {allSelectedGaps ? 'Restore' : 'Mark as gap'}{' '}
             {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
@@ -484,7 +484,7 @@ export function VenueBuilder({
             type="button"
             onClick={assignSelectedToSection}
             disabled={!draftSectionName.trim() || validPrice(draftSectionPrice) === null || selectedSeats.size === 0}
-            className="bg-black text-white px-4 py-2 rounded-md font-medium text-sm disabled:opacity-40"
+            className="min-h-[44px] bg-black text-white px-4 py-2 rounded-md font-medium text-sm disabled:opacity-40 sm:min-h-0"
           >
             Assign {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
           </button>

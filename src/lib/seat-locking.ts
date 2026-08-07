@@ -264,7 +264,7 @@ export async function createGuestBooking(params: {
         select: { id: true },
       });
 
-      await tx.booking.createMany({
+      const createdBookings = await tx.booking.createManyAndReturn({
         data: eventSeats.map((eventSeat) => ({
           eventId,
           eventSeatId: eventSeat.id,
@@ -275,14 +275,6 @@ export async function createGuestBooking(params: {
           confirmedByAdmin: adminId,
           confirmedAt: new Date(),
         })),
-      });
-
-      const createdBookings = await tx.booking.findMany({
-        where: {
-          eventId,
-          eventSeatId: { in: eventSeats.map((eventSeat) => eventSeat.id) },
-          caseType: CaseType.GUEST,
-        },
         select: { id: true },
       });
 
@@ -293,6 +285,9 @@ export async function createGuestBooking(params: {
       return { ok: false, error: error.message };
     }
 
+    // Unexpected — surface it in the server log so the failure is
+    // distinguishable from the expected availability race above.
+    console.error('Failed to create guest booking', error);
     return { ok: false, error: 'Could not create guest booking.' };
   }
 }
@@ -307,19 +302,24 @@ export async function createGuestBooking(params: {
 export async function expirePastDuePendingBookings(
   eventId?: string,
 ): Promise<number> {
+  const where = {
+    status: BookingStatus.PENDING,
+    expiresAt: { lt: new Date() },
+    ...(eventId ? { eventId } : {}),
+  };
+
+  // Cheap count first — the common case is nothing past due, and skipping the
+  // transaction (and its snapshot) avoids an unnecessary round-trip.
+  const pendingCount = await prisma.booking.count({ where });
+  if (pendingCount === 0) {
+    return 0;
+  }
+
   return prisma.$transaction(async (tx) => {
     const pastDueBookings = await tx.booking.findMany({
-      where: {
-        status: BookingStatus.PENDING,
-        expiresAt: { lt: new Date() },
-        ...(eventId ? { eventId } : {}),
-      },
+      where,
       select: { id: true, eventSeatId: true },
     });
-
-    if (pastDueBookings.length === 0) {
-      return 0;
-    }
 
     const bookingIds = pastDueBookings.map((b) => b.id);
     const eventSeatIds = pastDueBookings.map((b) => b.eventSeatId);
@@ -335,8 +335,8 @@ export async function expirePastDuePendingBookings(
     await tx.eventSeat.updateMany({
       where: {
         id: { in: eventSeatIds },
-        eventId,
         status: SeatStatus.PENDING,
+        ...(eventId ? { eventId } : {}),
       },
       data: {
         status: SeatStatus.AVAILABLE,

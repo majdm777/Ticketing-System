@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { formatPrice } from '@/lib/currency';
 
@@ -139,17 +139,27 @@ export function SeatMap({
     return () => observer.disconnect();
   }, []);
 
+  // Compute the three-block split once per row so splitLeftMiddleRight runs a
+  // single time per row (it feeds both the width math and the render below).
+  const rowsWithSplits = useMemo(
+    () => rows.map((row) => ({ row, split: splitLeftMiddleRight(row.seats) })),
+    [rows],
+  );
+
   const availW = containerW > 0 ? containerW : 360;
   const availForSeats = Math.max(1, availW - LABEL_WIDTH - LABEL_GAP);
   const maxSpan = Math.max(
     1,
-    ...rows.map((row) => {
+    ...rowsWithSplits.map(({ row, split }) => {
       const count = row.seats.length;
-      const hasGaps = splitLeftMiddleRight(row.seats) !== null;
+      // A split row renders as three blocks around two aisle spacers, and the
+      // flex gap runs between every child, so there are count + 1 gaps; an
+      // unsplit row has count - 1. Must match the layout below or rows won't
+      // fill the container at the same seat size.
       return (
         count +
-        (count - 1) * GAP_RATIO +
-        (hasGaps ? 2 * AISLE_RATIO : 0)
+        (split ? count + 1 : count - 1) * GAP_RATIO +
+        (split ? 2 * AISLE_RATIO : 0)
       );
     }),
   );
@@ -168,8 +178,7 @@ export function SeatMap({
             {stageLabel}
           </div>
         ) : null}
-        {rows.map((row) => {
-          const split = splitLeftMiddleRight(row.seats);
+        {rowsWithSplits.map(({ row, split }) => {
           return (
             <div key={row.label} className="flex items-center gap-2">
               <span className="w-8 shrink-0 text-right text-xs text-zinc-500">
@@ -340,7 +349,7 @@ function SeatButton({
           aria-hidden="true"
           style={{
             fontSize: numberFontSize,
-            color: seat.disabled ? '#a1a1aa' : seatTextColor(seat.color),
+            color: seat.disabled ? '#71717a' : seatTextColor(seat.color),
           }}
         >
           {seat.number}

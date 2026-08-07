@@ -89,16 +89,8 @@ export async function getPublicEventBySlug(
 ): Promise<PublicEventLookup> {
   // Lazily expire this event's past-due pending holds before loading the map,
   // so a stale lock frees itself on the attendee's visit (no admin action,
-  // no background job). Only when the event is actually live — DRAFT, ended,
-  // and unknown slugs stay read-only.
-  const probe = await prisma.event.findFirst({
-    where: { slug },
-    select: { id: true, status: true, startsAt: true },
-  });
-  if (probe && probe.status === EventStatus.PUBLISHED && probe.startsAt > new Date()) {
-    await expirePastDuePendingBookings(probe.id);
-  }
-
+  // no background job). The sweep runs after the live guards below so the
+  // event is looked up once, and seat data is read after any frees.
   const event = await prisma.event.findUnique({
     where: { slug },
     select: {
@@ -109,20 +101,6 @@ export async function getPublicEventBySlug(
       slug: true,
       status: true,
       venue: { select: { name: true, address: true } },
-      eventSeats: {
-        select: {
-          id: true,
-          status: true,
-          venueSeat: {
-            select: {
-              id: true,
-              row: true,
-              number: true,
-              section: { select: { name: true, price: true } },
-            },
-          },
-        },
-      },
     },
   });
 
@@ -151,12 +129,30 @@ export async function getPublicEventBySlug(
     };
   }
 
+  await expirePastDuePendingBookings(event.id);
+
+  const eventSeats = await prisma.eventSeat.findMany({
+    where: { eventId: event.id },
+    select: {
+      id: true,
+      status: true,
+      venueSeat: {
+        select: {
+          id: true,
+          row: true,
+          number: true,
+          section: { select: { name: true, price: true } },
+        },
+      },
+    },
+  });
+
   // Gap seats have no section; collect them flat so the map can still render
   // the blocked-out positions while keeping section grouping intact.
   const gapSeats: PublicGapSeat[] = [];
 
   const sectionNames: string[] = [];
-  for (const eventSeat of event.eventSeats) {
+  for (const eventSeat of eventSeats) {
     const { row, number, section } = eventSeat.venueSeat;
     if (eventSeat.status === SeatStatus.GAP || !section) {
       gapSeats.push({
@@ -174,7 +170,7 @@ export async function getPublicEventBySlug(
   const colors = buildSectionColorMap(sectionNames);
 
   const groupsBySection = new Map<string, PublicSeatGroup>();
-  for (const eventSeat of event.eventSeats) {
+  for (const eventSeat of eventSeats) {
     const { row, number, section } = eventSeat.venueSeat;
     if (eventSeat.status === SeatStatus.GAP || !section) continue;
 
