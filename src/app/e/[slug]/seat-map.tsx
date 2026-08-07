@@ -3,76 +3,68 @@
 import { useState } from 'react';
 
 import { SeatMap as VenueSeatMap, type SeatMapRow } from '@/components/seat-map';
-import type { PublicSeatGroup } from '@/lib/public-events';
+import type { PublicGapSeat, PublicSeatGroup } from '@/lib/public-events';
+import { buildSeatMapData } from '@/lib/seat-map-data';
 
 // Feeds the shared SeatMap component with the event's live seat data. A single
 // venue row can hold seats from more than one section, so rows are merged
-// across sections first and then rendered once, in row order. Merging keys on
-// (row, number) is safe because VenueSeat guarantees the coordinate is unique
-// per venue (@@unique([venueId, row, number])) — a number can never appear
-// twice in a row, even across sections.
+// across sections first and then rendered once, in row order. buildSeatMapData
+// does the merging, coloring, and row ordering; this wrapper only adds the
+// click behavior and the taken-seat grey-out. Gap seats (blocked-out venue
+// positions) have no section and are fed in flat, so they render as empty
+// slots that keep the row layout intact.
 
-function compareRowLabels(a: string, b: string): number {
-  const aNum = Number(a);
-  const bNum = Number(b);
-  if (Number.isInteger(aNum) && Number.isInteger(bNum)) {
-    return aNum - bNum;
-  }
-  return a.localeCompare(b);
-}
-
-function compareSeatNumbers(a: string, b: string): number {
-  return Number(a) - Number(b) || a.localeCompare(b);
-}
-
-type MergedSeat = {
-  seat: PublicSeatGroup['rows'][number]['seats'][number];
-  color: string;
-  section: string;
-};
-
-export function SeatMap({ seatGroups }: { seatGroups: PublicSeatGroup[] }) {
+export function SeatMap({
+  seatGroups,
+  gapSeats,
+}: {
+  seatGroups: PublicSeatGroup[];
+  gapSeats: PublicGapSeat[];
+}) {
   const [selectedSeatId, setSelectedSeatId] = useState('');
 
-  const rowMap = new Map<string, Map<string, MergedSeat>>();
-  for (const group of seatGroups) {
-    for (const row of group.rows) {
-      let seatMap = rowMap.get(row.row);
-      if (!seatMap) {
-        seatMap = new Map();
-        rowMap.set(row.row, seatMap);
-      }
-      for (const seat of row.seats) {
-        seatMap.set(seat.number, {
-          seat,
-          color: group.color,
+  const seats = [
+    ...seatGroups.flatMap((group) =>
+      group.rows.flatMap((row) =>
+        row.seats.map((seat) => ({
+          id: seat.id,
+          venueSeatId: seat.venueSeatId,
+          row: row.row,
+          number: seat.number,
           section: group.section,
-        });
-      }
-    }
-  }
+          status: seat.status,
+        })),
+      ),
+    ),
+    ...gapSeats.map((gap) => ({
+      id: gap.id,
+      venueSeatId: gap.venueSeatId,
+      row: gap.row,
+      number: gap.number,
+      section: '',
+      status: 'GAP',
+    })),
+  ];
+  const { rows: dataRows } = buildSeatMapData(seats);
 
-  const rows: SeatMapRow[] = Array.from(rowMap.entries())
-    .sort((a, b) => compareRowLabels(a[0], b[0]))
-    .map(([label, seatMap]) => ({
-      label,
-      seats: Array.from(seatMap.values())
-        .sort((a, b) => compareSeatNumbers(a.seat.number, b.seat.number))
-        .map(({ seat, color, section }) => {
-          const available = seat.status === 'AVAILABLE';
-          return {
-            id: seat.id,
-            color: available ? color : '#e5e7eb',
-            disabled: !available,
-            selected: selectedSeatId === seat.venueSeatId,
-            onClick: () =>
-              setSelectedSeatId(selectedSeatId === seat.venueSeatId ? '' : seat.venueSeatId),
-            ariaLabel: `${section} section, row ${label}, seat ${seat.number}${
-              available ? '' : ', taken'
-            }`,
-          };
-        }),
-    }));
+  const rows: SeatMapRow[] = dataRows.map((dataRow) => ({
+    label: dataRow.row,
+    seats: dataRow.seats.map((seat) => ({
+      id: seat.id,
+      number: seat.number,
+      gap: seat.gap,
+      color: seat.available ? seat.color : '#e5e7eb',
+      disabled: !seat.available,
+      selected: selectedSeatId === seat.venueSeatId,
+      onClick: () =>
+        setSelectedSeatId(
+          selectedSeatId === seat.venueSeatId ? '' : seat.venueSeatId,
+        ),
+      ariaLabel: `${seat.section} section, row ${dataRow.row}, seat ${
+        seat.number
+      }${seat.available ? '' : ', taken'}`,
+    })),
+  }));
 
   return (
     <VenueSeatMap

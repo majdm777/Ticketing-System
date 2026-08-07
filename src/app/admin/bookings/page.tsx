@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 import { PendingBookingActions } from './pending-booking-actions';
 
@@ -32,6 +33,10 @@ export default async function AdminBookingsPage({
         include: { venue: true },
       })
     : null;
+
+  if (event) {
+    await expirePastDuePendingBookings(event.id);
+  }
 
   const bookings = event
     ? await prisma.booking.findMany({
@@ -130,7 +135,7 @@ export default async function AdminBookingsPage({
                     <div>
                       <dt className="text-xs uppercase text-zinc-500">Seat</dt>
                       <dd className="text-zinc-700">
-                        {booking.eventSeat.venueSeat.section.name}{' '}
+                        {booking.eventSeat.venueSeat.section?.name}{' '}
                         {booking.eventSeat.venueSeat.row}
                         {booking.eventSeat.venueSeat.number}
                       </dd>
@@ -195,7 +200,7 @@ export default async function AdminBookingsPage({
                       <div className="text-zinc-600">{booking.userPhone}</div>
                     </td>
                     <td className="px-4 py-3 text-zinc-700">
-                      {booking.eventSeat.venueSeat.section.name}{' '}
+                      {booking.eventSeat.venueSeat.section?.name}{' '}
                       {booking.eventSeat.venueSeat.row}
                       {booking.eventSeat.venueSeat.number}
                     </td>

@@ -1,10 +1,15 @@
 import { z } from 'zod';
 
-const seatSchema = z.object({
-  row: z.string().trim().min(1).max(10),
-  number: z.string().trim().min(1).max(10),
-  section: z.string().trim().min(1, 'Every seat must belong to a section.').max(60),
-});
+const seatSchema = z
+  .object({
+    row: z.string().trim().min(1).max(10),
+    number: z.string().trim().min(1).max(10),
+    section: z.string().trim().min(1).max(60).optional(),
+    gap: z.boolean().optional(),
+  })
+  .refine((seat) => Boolean(seat.gap) !== Boolean(seat.section), {
+    message: 'A seat is either a gap (no section) or belongs to a section — not both.',
+  });
 
 const sectionSchema = z.object({
   name: z.string().trim().min(1, 'Section name is required.').max(60),

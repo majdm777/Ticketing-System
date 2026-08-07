@@ -1,6 +1,7 @@
 import { EventStatus, SeatStatus } from '@prisma/client';
 
 import { prisma } from './prisma';
+import { expirePastDuePendingBookings } from './seat-locking';
 import { buildSectionColorMap } from './section-colors';
 
 export type PublicSeat = {
@@ -23,6 +24,13 @@ export type PublicSeatGroup = {
   rows: PublicSeatRow[];
 };
 
+export type PublicGapSeat = {
+  id: string;
+  venueSeatId: string;
+  row: string;
+  number: string;
+};
+
 export type PublicEvent = {
   id: string;
   name: string;
@@ -34,6 +42,7 @@ export type PublicEvent = {
     address: string;
   };
   seatGroups: PublicSeatGroup[];
+  gapSeats: PublicGapSeat[];
 };
 
 export type PublicEndedEvent = {
@@ -78,6 +87,10 @@ function compareSeatNumbers(a: string, b: string): number {
 export async function getPublicEventBySlug(
   slug: string
 ): Promise<PublicEventLookup> {
+  // Lazily expire this event's past-due pending holds before loading the map,
+  // so a stale lock frees itself on the attendee's visit (no admin action,
+  // no background job). The sweep runs after the live guards below so the
+  // event is looked up once, and seat data is read after any frees.
   const event = await prisma.event.findUnique({
     where: { slug },
     select: {
@@ -88,20 +101,6 @@ export async function getPublicEventBySlug(
       slug: true,
       status: true,
       venue: { select: { name: true, address: true } },
-      eventSeats: {
-        select: {
-          id: true,
-          status: true,
-          venueSeat: {
-            select: {
-              id: true,
-              row: true,
-              number: true,
-              section: { select: { name: true, price: true } },
-            },
-          },
-        },
-      },
     },
   });
 
@@ -130,12 +129,50 @@ export async function getPublicEventBySlug(
     };
   }
 
-  const sectionNames = event.eventSeats.map((eventSeat) => eventSeat.venueSeat.section.name);
+  await expirePastDuePendingBookings(event.id);
+
+  const eventSeats = await prisma.eventSeat.findMany({
+    where: { eventId: event.id },
+    select: {
+      id: true,
+      status: true,
+      venueSeat: {
+        select: {
+          id: true,
+          row: true,
+          number: true,
+          section: { select: { name: true, price: true } },
+        },
+      },
+    },
+  });
+
+  // Gap seats have no section; collect them flat so the map can still render
+  // the blocked-out positions while keeping section grouping intact.
+  const gapSeats: PublicGapSeat[] = [];
+
+  const sectionNames: string[] = [];
+  for (const eventSeat of eventSeats) {
+    const { row, number, section } = eventSeat.venueSeat;
+    if (eventSeat.status === SeatStatus.GAP || !section) {
+      gapSeats.push({
+        id: eventSeat.id,
+        venueSeatId: eventSeat.venueSeat.id,
+        row,
+        number,
+      });
+      continue;
+    }
+    if (!sectionNames.includes(section.name)) {
+      sectionNames.push(section.name);
+    }
+  }
   const colors = buildSectionColorMap(sectionNames);
 
   const groupsBySection = new Map<string, PublicSeatGroup>();
-  for (const eventSeat of event.eventSeats) {
+  for (const eventSeat of eventSeats) {
     const { row, number, section } = eventSeat.venueSeat;
+    if (eventSeat.status === SeatStatus.GAP || !section) continue;
 
     let group = groupsBySection.get(section.name);
     if (!group) {
@@ -181,6 +218,7 @@ export async function getPublicEventBySlug(
       slug: event.slug,
       venue: event.venue,
       seatGroups,
+      gapSeats,
     },
   };
 }

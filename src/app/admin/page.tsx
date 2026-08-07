@@ -1,8 +1,10 @@
 import { BookingStatus, SeatStatus, type EventStatus } from '@prisma/client';
 import Link from 'next/link';
 
+import { countBookableSeats } from '@/lib/events';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 const statusStyles: Record<EventStatus, string> = {
   DRAFT: 'bg-zinc-100 text-zinc-600',
@@ -12,6 +14,8 @@ const statusStyles: Record<EventStatus, string> = {
 };
 
 export default async function AdminDashboardPage() {
+  await expirePastDuePendingBookings();
+
   const events = await prisma.event.findMany({
     orderBy: { startsAt: 'desc' },
     include: { venue: true },
@@ -58,7 +62,7 @@ export default async function AdminDashboardPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {events.map((event) => {
             const seatCounts = seatCountsByEvent.get(event.id) ?? {};
-            const totalSeats = Object.values(seatCounts).reduce((sum, count) => sum + count, 0);
+            const totalSeats = countBookableSeats(seatCounts);
             const available = seatCounts[SeatStatus.AVAILABLE] ?? 0;
             const pending = seatCounts[SeatStatus.PENDING] ?? 0;
             const booked = seatCounts[SeatStatus.BOOKED] ?? 0;

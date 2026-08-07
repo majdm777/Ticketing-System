@@ -2,62 +2,9 @@ import Link from 'next/link';
 import { EventStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 import { GuestBookingForm } from './guest-booking-form';
-
-function groupSeats(
-  seats: {
-    id: string;
-    venueSeatId: string;
-    status: string;
-    venueSeat: { section: { name: string; price: number }; row: string; number: string };
-  }[],
-) {
-  const sections = new Map<
-    string,
-    {
-      price: number;
-      rows: Map<
-        string,
-        {
-          id: string;
-          venueSeatId: string;
-          status: string;
-          label: string;
-        }[]
-      >;
-    }
-  >();
-
-  for (const seat of seats) {
-    const entry = sections.get(seat.venueSeat.section.name) ?? {
-      price: seat.venueSeat.section.price,
-      rows: new Map<string, { id: string; venueSeatId: string; status: string; label: string }[]>(),
-    };
-    const row = entry.rows.get(seat.venueSeat.row) ?? [];
-
-    row.push({
-      id: seat.id,
-      venueSeatId: seat.venueSeatId,
-      status: seat.status,
-      label: seat.venueSeat.number,
-    });
-
-    entry.rows.set(seat.venueSeat.row, row);
-    sections.set(seat.venueSeat.section.name, entry);
-  }
-
-  return Array.from(sections.entries()).map(([section, { price, rows }]) => ({
-    section,
-    price,
-    rows: Array.from(rows.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([row, rowSeats]) => ({
-        row,
-        seats: rowSeats.sort((a, b) => Number(a.label) - Number(b.label)),
-      })),
-  })).sort((a, b) => a.section.localeCompare(b.section));
-}
 
 export default async function NewGuestBookingPage({
   searchParams,
@@ -73,13 +20,36 @@ export default async function NewGuestBookingPage({
       })
     : null;
 
+  if (event) {
+    await expirePastDuePendingBookings(event.id);
+  }
+
   const seats = event
-      ? await prisma.eventSeat.findMany({
-          where: { eventId: event.id },
-          include: { venueSeat: { include: { section: true } } },
+    ? await prisma.eventSeat.findMany({
+        where: { eventId: event.id },
+        include: { venueSeat: { include: { section: true } } },
         orderBy: { createdAt: 'asc' },
-        })
+      })
     : [];
+
+  const flatSeats = seats.map((seat) => ({
+    id: seat.id,
+    venueSeatId: seat.venueSeatId,
+    row: seat.venueSeat.row,
+    number: seat.venueSeat.number,
+    section: seat.venueSeat.section?.name ?? '',
+    status: seat.status,
+  }));
+
+  const sections = Array.from(
+    seats.reduce((map, seat) => {
+      if (!seat.venueSeat.section) return map;
+      if (!map.has(seat.venueSeat.section.name)) {
+        map.set(seat.venueSeat.section.name, seat.venueSeat.section.price);
+      }
+      return map;
+    }, new Map<string, number>()),
+  ).map(([name, price]) => ({ name, price }));
 
   return (
     <div className="space-y-6">
@@ -111,7 +81,7 @@ export default async function NewGuestBookingPage({
               <h2 className="font-semibold tracking-tight">{event.name}</h2>
               <p className="text-sm leading-6 text-zinc-600">{event.venue.name}</p>
             </section>
-            <GuestBookingForm eventId={event.id} seatGroups={groupSeats(seats)} />
+            <GuestBookingForm eventId={event.id} seats={flatSeats} sections={sections} />
           </>
         )
       ) : (

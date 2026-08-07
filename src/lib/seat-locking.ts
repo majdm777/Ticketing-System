@@ -215,12 +215,12 @@ export async function cancelBooking(params: {
 
 export async function createGuestBooking(params: {
   eventId: string;
-  venueSeatId: string;
+  venueSeatIds: string[];
   userName: string;
   userPhone: string;
   adminId: string;
-}): Promise<ActionResult<{ bookingId: string }>> {
-  const { eventId, venueSeatId, userName, userPhone, adminId } = params;
+}): Promise<ActionResult<{ bookingIds: string[] }>> {
+  const { eventId, venueSeatIds, userName, userPhone, adminId } = params;
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -235,7 +235,7 @@ export async function createGuestBooking(params: {
       const seatResult = await tx.eventSeat.updateMany({
         where: {
           eventId,
-          venueSeatId,
+          venueSeatId: { in: venueSeatIds },
           status: SeatStatus.AVAILABLE,
           event: { status: { not: EventStatus.CANCELED } },
         },
@@ -249,17 +249,23 @@ export async function createGuestBooking(params: {
         },
       });
 
-      if (seatResult.count === 0) {
-        return { ok: false, error: 'Seat is no longer available.' };
+      // Atomic claim: if every requested seat did not flip in this one
+      // update, one of them was taken in the meantime. Throw so the
+      // transaction rolls back the seats that did flip (returning here
+      // would commit them).
+      if (seatResult.count !== venueSeatIds.length) {
+        throw new SeatUnavailableError(
+          'One or more selected seats are no longer available.',
+        );
       }
 
-      const eventSeat = await tx.eventSeat.findUniqueOrThrow({
-        where: { eventId_venueSeatId: { eventId, venueSeatId } },
+      const eventSeats = await tx.eventSeat.findMany({
+        where: { eventId, venueSeatId: { in: venueSeatIds } },
         select: { id: true },
       });
 
-      const booking = await tx.booking.create({
-        data: {
+      const createdBookings = await tx.booking.createManyAndReturn({
+        data: eventSeats.map((eventSeat) => ({
           eventId,
           eventSeatId: eventSeat.id,
           userName,
@@ -268,41 +274,69 @@ export async function createGuestBooking(params: {
           status: BookingStatus.CONFIRMED,
           confirmedByAdmin: adminId,
           confirmedAt: new Date(),
-        },
+        })),
         select: { id: true },
       });
 
-      return { ok: true, bookingId: booking.id };
+      return { ok: true, bookingIds: createdBookings.map((b) => b.id) };
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof SeatUnavailableError) {
+      return { ok: false, error: error.message };
+    }
+
+    // Unexpected — surface it in the server log so the failure is
+    // distinguishable from the expected availability race above.
+    console.error('Failed to create guest booking', error);
     return { ok: false, error: 'Could not create guest booking.' };
   }
 }
 
-export async function expireBookingIfPastDue(bookingId: string) {
+// Expires every PENDING booking whose hold window has passed (and frees its
+// seat back to AVAILABLE). Called lazily from the pages that show seat or
+// booking state, so stale holds clear automatically on the next visit with no
+// admin action and no background job. Pass `eventId` to limit the sweep to one
+// event. All transitions stay guarded (status = PENDING) and run in one
+// transaction, so a booking that was confirmed or cancelled in the meantime is
+// never touched.
+export async function expirePastDuePendingBookings(
+  eventId?: string,
+): Promise<number> {
+  const where = {
+    status: BookingStatus.PENDING,
+    expiresAt: { lt: new Date() },
+    ...(eventId ? { eventId } : {}),
+  };
+
+  // Cheap count first — the common case is nothing past due, and skipping the
+  // transaction (and its snapshot) avoids an unnecessary round-trip.
+  const pendingCount = await prisma.booking.count({ where });
+  if (pendingCount === 0) {
+    return 0;
+  }
+
   return prisma.$transaction(async (tx) => {
-    const result = await tx.booking.updateMany({
-      where: {
-        id: bookingId,
-        status: BookingStatus.PENDING,
-        expiresAt: { lt: new Date() },
-      },
-      data: {
-        status: BookingStatus.EXPIRED,
-      },
+    const pastDueBookings = await tx.booking.findMany({
+      where,
+      select: { id: true, eventSeatId: true },
     });
 
-    if (result.count === 0) {
-      return false;
-    }
+    const bookingIds = pastDueBookings.map((b) => b.id);
+    const eventSeatIds = pastDueBookings.map((b) => b.eventSeatId);
 
-    const booking = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    await tx.booking.updateMany({
+      where: {
+        id: { in: bookingIds },
+        status: BookingStatus.PENDING,
+      },
+      data: { status: BookingStatus.EXPIRED },
+    });
 
     await tx.eventSeat.updateMany({
       where: {
-        id: booking.eventSeatId,
-        eventId: booking.eventId,
+        id: { in: eventSeatIds },
         status: SeatStatus.PENDING,
+        ...(eventId ? { eventId } : {}),
       },
       data: {
         status: SeatStatus.AVAILABLE,
@@ -314,6 +348,6 @@ export async function expireBookingIfPastDue(bookingId: string) {
       },
     });
 
-    return true;
+    return bookingIds.length;
   });
 }

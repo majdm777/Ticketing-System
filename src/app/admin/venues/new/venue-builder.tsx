@@ -23,6 +23,7 @@ export type VenueBuilderInitialData = {
   address: string;
   rows: { id: string; label: string; seatCount: number }[];
   assignments: Record<string, string>;
+  gaps: string[];
   sectionPrices: Record<string, string>;
   gPrice: string;
 };
@@ -88,6 +89,12 @@ export function VenueBuilder({
     initialData?.assignments ?? {}
   );
 
+  // Committed gaps: seatKeys that are blocked-out positions (no section, not
+  // bookable). Mirrors `assignments` — a seat is either a gap or a section seat.
+  const [gapSeats, setGapSeats] = useState<Set<string>>(
+    new Set(initialData?.gaps ?? [])
+  );
+
   // The section currently being built: its name and price, and the set of
   // seats toggled "in" for it so far, not yet committed to `assignments`.
   const [draftSectionName, setDraftSectionName] = useState('');
@@ -126,35 +133,11 @@ export function VenueBuilder({
     ]);
   }
 
-  function removeRow(rowId: string) {
-    setRows((prev) => prev.filter((r) => r.id !== rowId));
-
+  function purgeRowSeats(rowId: string, keepCount: number | null) {
     const prefix = `${rowId}__`;
-    setAssignments((prev) => {
-      const next = { ...prev };
-      for (const key of Object.keys(next)) {
-        if (key.startsWith(prefix)) delete next[key];
-      }
-      return next;
-    });
-    setSelectedSeats((prev) => {
-      const next = new Set(prev);
-      for (const key of next) {
-        if (key.startsWith(prefix)) next.delete(key);
-      }
-      return next;
-    });
-  }
-
-  function updateRowLabel(rowId: string, label: string) {
-    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, label } : r)));
-  }
-
-
-  function pruneRowSeats(rowId: string, keepCount: number) {
-    const prefix = `${rowId}__`;
-    const isOutOfRange = (key: string) => {
+    const shouldDrop = (key: string) => {
       if (!key.startsWith(prefix)) return false;
+      if (keepCount === null) return true;
       const seatNumber = Number(key.slice(prefix.length));
       return !Number.isFinite(seatNumber) || keepCount === 0 || seatNumber > keepCount;
     };
@@ -162,18 +145,33 @@ export function VenueBuilder({
     setAssignments((prev) => {
       const next = { ...prev };
       for (const key of Object.keys(next)) {
-        if (isOutOfRange(key)) delete next[key];
+        if (shouldDrop(key)) delete next[key];
       }
       return next;
     });
-
+    setGapSeats((prev) => {
+      const next = new Set(prev);
+      for (const key of next) {
+        if (shouldDrop(key)) next.delete(key);
+      }
+      return next;
+    });
     setSelectedSeats((prev) => {
       const next = new Set(prev);
       for (const key of next) {
-        if (isOutOfRange(key)) next.delete(key);
+        if (shouldDrop(key)) next.delete(key);
       }
       return next;
     });
+  }
+
+  function removeRow(rowId: string) {
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+    purgeRowSeats(rowId, null);
+  }
+
+  function updateRowLabel(rowId: string, label: string) {
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, label } : r)));
   }
 
   function updateRowSeatCount(rowId: string, rawValue: string) {
@@ -181,7 +179,7 @@ export function VenueBuilder({
 
     if (trimmed === '') {
       setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, seatCount: null } : r)));
-      pruneRowSeats(rowId, 0);
+      purgeRowSeats(rowId, 0);
       return;
     }
 
@@ -192,7 +190,7 @@ export function VenueBuilder({
       setRows((prev) =>
         prev.map((r) => (r.id === rowId ? { ...r, seatCount: parsed } : r))
       );
-      pruneRowSeats(rowId, parsed);
+      purgeRowSeats(rowId, parsed);
     }
   }
 
@@ -227,9 +225,44 @@ export function VenueBuilder({
       }
       return next;
     });
+    setGapSeats((prev) => {
+      const next = new Set(prev);
+      for (const key of selectedSeats) {
+        next.delete(key);
+      }
+      return next;
+    });
     setSelectedSeats(new Set());
     setDraftSectionName('');
     setDraftSectionPrice('');
+  }
+
+  function markSelectedAsGap() {
+    if (selectedSeats.size === 0) return;
+
+    const allAlreadyGaps = Array.from(selectedSeats).every((key) => gapSeats.has(key));
+
+    setGapSeats((prev) => {
+      const next = new Set(prev);
+      for (const key of selectedSeats) {
+        if (allAlreadyGaps) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+      }
+      return next;
+    });
+    if (!allAlreadyGaps) {
+      setAssignments((prev) => {
+        const next = { ...prev };
+        for (const key of selectedSeats) {
+          delete next[key];
+        }
+        return next;
+      });
+    }
+    setSelectedSeats(new Set());
   }
 
   async function handleSubmit() {
@@ -257,21 +290,34 @@ export function VenueBuilder({
       return;
     }
 
-    // Flatten the grid into a flat seat list, defaulting any seat that
-    // never got explicitly assigned to section "G".
+    // Flatten the grid into a flat seat list: gap seats carry no section,
+    // every other seat defaults to section "G" if never explicitly assigned.
     const usedSectionNames = new Set<string>();
     const seats = rows.flatMap((row) =>
       Array.from({ length: row.seatCount ?? 0 }).map((_, seatIndex) => {
         const key = seatKey(row.id, seatIndex + 1);
+        const number = String(seatIndex + 1);
+        if (gapSeats.has(key)) {
+          return {
+            row: row.label, // display label is still what actually gets saved as the seat's row
+            number,
+            gap: true,
+          };
+        }
         const section = assignments[key] ?? 'G';
         usedSectionNames.add(section);
         return {
-          row: row.label, // display label is still what actually gets saved as the seat's row
-          number: String(seatIndex + 1),
+          row: row.label,
+          number,
           section,
         };
       })
     );
+
+    if (!seats.some((seat) => !seat.gap)) {
+      setResult({ ok: false, error: 'At least one seat must not be a gap.' });
+      return;
+    }
 
     // Every section that actually has seats needs a price, including "G".
     const sections: { name: string; price: number }[] = [];
@@ -312,6 +358,9 @@ export function VenueBuilder({
   // even before anything is explicitly assigned to it.
   const sectionNames = Array.from(new Set([...Object.values(assignments), 'G']));
   const colorMap = buildSectionColorMap(sectionNames);
+  const allSelectedGaps =
+    selectedSeats.size > 0 &&
+    Array.from(selectedSeats).every((key) => gapSeats.has(key));
 
   return (
     <div>
@@ -350,41 +399,44 @@ export function VenueBuilder({
         </div>
 
         {rows.map((row, rowIndex) => (
-          <div key={row.id} className="flex items-center gap-3 mb-2">
+          <div key={row.id} className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:gap-3">
             <input
               type="text"
               value={row.label}
               onChange={(e) => updateRowLabel(row.id, e.target.value)}
               aria-label={`Row ${rowIndex + 1} label`}
-              className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-3 text-base sm:flex-1 sm:py-2"
               placeholder="Row label (e.g. A)"
             />
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={row.seatCount ?? ''}
-              onChange={(e) => updateRowSeatCount(row.id, e.target.value)}
-              aria-label={`Row ${rowIndex + 1} seat count`}
-              className="flex-1 border border-gray-300 rounded-md px-3 py-2"
-              placeholder="Seats in this row"
-            />
-            {rows.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removeRow(row.id)}
-                className="text-xs text-gray-400 hover:text-red-600 px-2"
-              >
-                Remove
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={100}
+                inputMode="numeric"
+                value={row.seatCount ?? ''}
+                onChange={(e) => updateRowSeatCount(row.id, e.target.value)}
+                aria-label={`Row ${rowIndex + 1} seat count`}
+                className="flex-1 border border-gray-300 rounded-md px-3 py-3 text-base sm:w-32 sm:flex-none sm:py-2"
+                placeholder="Seats"
+              />
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.id)}
+                  className="min-h-[44px] px-3 text-sm text-red-600 sm:min-h-0 sm:py-2 sm:text-xs sm:text-gray-400 hover:text-red-600"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         ))}
 
         <button
           type="button"
           onClick={addRow}
-          className="mt-2 border border-gray-300 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50"
+          className="mt-2 w-full border border-gray-300 px-4 py-3 rounded-md font-medium text-sm hover:bg-gray-50 sm:w-auto sm:py-2"
         >
           + Add row
         </button>
@@ -392,7 +444,7 @@ export function VenueBuilder({
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-bold mb-3">Build a section</h2>
-        <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="grid grid-cols-1 gap-3 mb-3 sm:grid-cols-2">
           <input
             type="text"
             value={draftSectionName}
@@ -418,24 +470,36 @@ export function VenueBuilder({
             Equivalent: {formatPrice(validPrice(draftSectionPrice)!)}
           </p>
         ) : null}
-        <button
-          type="button"
-          onClick={assignSelectedToSection}
-          disabled={!draftSectionName.trim() || validPrice(draftSectionPrice) === null || selectedSeats.size === 0}
-          className="bg-black text-white px-4 py-2 rounded-md font-medium text-sm disabled:opacity-40"
-        >
-          Assign {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={markSelectedAsGap}
+            disabled={selectedSeats.size === 0}
+            className="min-h-[44px] border border-gray-300 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 disabled:opacity-40 sm:min-h-0"
+          >
+            {allSelectedGaps ? 'Restore' : 'Mark as gap'}{' '}
+            {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
+          </button>
+          <button
+            type="button"
+            onClick={assignSelectedToSection}
+            disabled={!draftSectionName.trim() || validPrice(draftSectionPrice) === null || selectedSeats.size === 0}
+            className="min-h-[44px] bg-black text-white px-4 py-2 rounded-md font-medium text-sm disabled:opacity-40 sm:min-h-0"
+          >
+            Assign {selectedSeats.size > 0 ? `${selectedSeats.size} seat(s)` : 'selected'}
+          </button>
+        </div>
         {draftSectionName.trim() && selectedSeats.size > 0 && validPrice(draftSectionPrice) === null ? (
           <p role="alert" className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             Add a price for section &quot;{draftSectionName.trim()}&quot; (a whole-dollar amount above zero) before assigning seats.
           </p>
         ) : null}
         <p className="text-sm text-gray-500 mt-3">
-          Click seats below to select them for this section, then hit Assign. Any seat left
-          unassigned will default to section &quot;G&quot; (General).
+          Click seats below to select them, then either hit Assign to put them in a section, or
+          Mark as gap to block them out (a gap can&apos;t be booked). Any seat left unassigned will
+          default to section &quot;G&quot; (General).
         </p>
-        <div className="mt-4 flex items-center gap-3 border-t border-gray-200 pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-3">
           <label htmlFor="g-section-price" className="text-sm font-medium text-gray-700 whitespace-nowrap">
             Default &quot;G&quot; price
           </label>
@@ -461,18 +525,24 @@ export function VenueBuilder({
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-bold mb-4">Seat map</h2>
         <SeatMap
+          gapEditable
           rows={rows.map((row) => ({
             label: row.label,
             seats: Array.from({ length: row.seatCount ?? 0 }).map(
               (_, seatIndex) => {
                 const key = seatKey(row.id, seatIndex + 1);
                 const assignedSection = assignments[key] ?? 'G';
+                const isGap = gapSeats.has(key);
                 return {
                   id: key,
+                  number: String(seatIndex + 1),
+                  gap: isGap,
                   color: colorMap.get(assignedSection) ?? '#e5e7eb',
                   selected: selectedSeats.has(key),
                   onClick: () => toggleSeat(key),
-                  ariaLabel: `${row.label} seat ${seatIndex + 1}, ${assignedSection}`,
+                  ariaLabel: isGap
+                    ? `${row.label} seat ${seatIndex + 1}, gap`
+                    : `${row.label} seat ${seatIndex + 1}, ${assignedSection}`,
                 };
               }
             ),
@@ -489,6 +559,10 @@ export function VenueBuilder({
             };
           })}
         />
+        <p className="mt-2 text-xs text-gray-500">
+          Dashed, hatched seats are gaps — blocked-out positions that can&apos;t be
+          booked. Click one to select it, then hit Restore to bring it back.
+        </p>
       </div>
 
       {result.error && (

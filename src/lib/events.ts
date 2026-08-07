@@ -1,6 +1,16 @@
-import { BookingStatus, EventStatus, Prisma, SeatStatus } from '@prisma/client';
+import { BookingStatus, CaseType, EventStatus, Prisma, SeatStatus } from '@prisma/client';
 
 import { prisma } from './prisma';
+
+// Bookable capacity = every seat minus the gap seats. Gap seats only exist to
+// block out positions on the seat map and can never be booked, so they are
+// excluded from the total (admin dashboard uses the same helper).
+export function countBookableSeats(counts: Partial<Record<SeatStatus, number>>): number {
+  return (
+    Object.values(counts).reduce((sum, count) => sum + count, 0) -
+    (counts[SeatStatus.GAP] ?? 0)
+  );
+}
 
 export type EventWithStats = {
   id: string;
@@ -42,7 +52,7 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
             JOIN "EventSeat" es ON es."id" = b."eventSeatId" AND es."eventId" = b."eventId"
             JOIN "VenueSeat" vse ON vse."id" = es."venueSeatId" AND vse."venueId" = es."venueId"
             JOIN "VenueSection" s ON s."id" = vse."sectionId" AND s."venueId" = vse."venueId"
-            WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."eventId" IN (${Prisma.join(eventIds)})
+            WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."eventId" IN (${Prisma.join(eventIds)}) AND b."caseType" = ${CaseType.ONLINE_CODE}::"CaseType"
             GROUP BY b."eventId"
           `,
         );
@@ -63,7 +73,10 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
 
   return events.map((event) => {
     const counts = seatCountsByEvent.get(event.id) ?? {};
-    const totalSeats = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    // Revenue counts confirmed ONLINE_CODE bookings only. GUEST bookings are
+    // placed directly by an admin (often comped) and PAY_AT_DOOR isn't matched
+    // to an in-app payment, so both are deliberately excluded.
+    const totalSeats = countBookableSeats(counts);
 
     return {
       id: event.id,

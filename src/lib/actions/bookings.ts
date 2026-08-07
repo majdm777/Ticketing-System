@@ -87,7 +87,7 @@ export async function createGuestBookingAction(
 
   const parsed = guestBookingSchema.safeParse({
     eventId: formValue(formData, 'eventId'),
-    venueSeatId: formValue(formData, 'venueSeatId'),
+    venueSeatIds: formData.getAll('venueSeatIds').map(String),
     userName: formValue(formData, 'userName'),
     userPhone: formValue(formData, 'userPhone'),
   });

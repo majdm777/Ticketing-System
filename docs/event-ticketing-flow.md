@@ -58,6 +58,14 @@ Venue
 - The layout is organized into `VenueSection`s: each section has a unique
   name and a per-seat `price` in whole US dollars. Every `VenueSeat`
   belongs to exactly one section and shares its price.
+- **Gap seats**: a `VenueSeat` may instead be a **gap** (`gap: true`,
+  `sectionId` null) — a blocked-out position that keeps its `(row, number)`
+  in the map's contiguous `1..N` numbering (so the layout and three-block
+  split stay intact) but belongs to no section, is never selectable or
+  bookable, and renders as an empty slot on every seat map. Gaps are
+  authored once at venue creation and cloned into the event as
+  `EventSeat`s with `status: GAP` — they participate in row sizing but are
+  never targets of booking logic.
 - Creating an `Event` clones every `VenueSeat` into a matching `EventSeat`,
   all starting `AVAILABLE`. This clone is what booking logic actually
   touches — the original `VenueSeat` layout is never modified by bookings.
@@ -138,7 +146,9 @@ Venue
   - Created directly by the admin: the seat atomically transitions
     `AVAILABLE → BOOKED` and a `Booking` is created directly `CONFIRMED`,
     no `PENDING` state and no expiry — skips the request/confirm split
-    entirely.
+    entirely. An admin can guest-book several seats at once for the same
+    guest (same name/phone): one `Booking` per seat, and the claim over the
+    batch is atomic (any taken seat rolls the whole batch back).
 - Locking rule that applies to all three cases: every state transition is a
   single conditional `updateMany` guarded on the row's current status
   (e.g. `WHERE status = 'AVAILABLE'`), never a separate read followed by a
@@ -188,6 +198,7 @@ Venue
 - AVAILABLE
 - PENDING
 - BOOKED
+- GAP
 - CANCELED
 
 #### CaseType

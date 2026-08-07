@@ -90,7 +90,7 @@ export default async function PublicEventPage({
             </p>
           </div>
           {/* keyed by event so the selection resets when navigating between events */}
-          <SeatMap key={event.id} seatGroups={event.seatGroups} />
+          <SeatMap key={event.id} seatGroups={event.seatGroups} gapSeats={event.gapSeats} />
         </section>
       </div>
     </main>

@@ -24,6 +24,7 @@ enum SeatStatus {
   PENDING
   BOOKED
   CANCELED
+  GAP
 }
 
 enum CaseType {
@@ -75,8 +76,10 @@ model VenueSeat {
 
   row       String
   number    String
-  sectionId String
-  section   VenueSection @relation(fields: [sectionId, venueId], references: [id, venueId])
+  sectionId String?
+  section   VenueSection? @relation(fields: [sectionId, venueId], references: [id, venueId])
+
+  gap       Boolean @default(false)
 
   eventSeats EventSeat[]
 
