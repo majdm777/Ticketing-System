@@ -1,7 +1,7 @@
 we will be doing the models, tables and everything in this order:
 
 0. enums
-1. venue + venue_seat
+1. venue + venue_section + venue_seat
 2. event + event_seat
 3. booking
 
@@ -25,12 +25,14 @@ enum EventStatus {
 DRAFT
 PUBLISHED
 CLOSED
+CANCELED // admin cancels a published, not-yet-started event
 }
 
 enum SeatStatus {
 AVAILABLE
 PENDING
 BOOKED
+CANCELED // every seat of a CANCELED event
 }
 
 enum CaseType {
@@ -59,12 +61,36 @@ address String
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 
+sections VenueSection[]
 seats VenueSeat[]
 events Event[]
 }
 
 // ============================================================
-// 2. VENUE_SEAT
+// 2. VENUE_SECTION
+// ============================================================
+
+model VenueSection {
+id String @id @default(cuid())
+
+venueId String
+
+name String // unique per venue
+price Int // per-seat price, whole US dollars
+
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+
+venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+seats VenueSeat[]
+
+@@unique([venueId, name])
+@@unique([id, venueId])
+}
+
+// ============================================================
+// 3. VENUE_SEAT
 // ============================================================
 
 model VenueSeat {
@@ -74,21 +100,22 @@ venueId String
 
 row String
 number String
-section String
+sectionId String
 
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 
 venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+section VenueSection @relation(fields: [sectionId, venueId], references: [id, venueId])
 
 eventSeats EventSeat[]
 
-@@unique([venueId, row, number, section])
+@@unique([venueId, row, number])
 @@unique([id, venueId])
 }
 
 // ============================================================
-// 3. EVENT
+// 4. EVENT
 // ============================================================
 
 model Event {
@@ -115,7 +142,7 @@ bookings Booking[]
 }
 
 // ============================================================
-// 4. EVENT_SEAT
+// 5. EVENT_SEAT
 // ============================================================
 
 model EventSeat {
@@ -147,7 +174,7 @@ bookings Booking[]
 }
 
 // ============================================================
-// 5. BOOKING
+// 6. BOOKING
 // ============================================================
 
 model Booking {

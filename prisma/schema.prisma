@@ -80,7 +80,7 @@ model VenueSeat {
 
   eventSeats EventSeat[]
 
-  @@unique([venueId, row, number, sectionId])
+  @@unique([venueId, row, number])
   @@unique([id, venueId])
 }
 
