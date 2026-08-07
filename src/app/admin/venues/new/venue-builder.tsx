@@ -466,17 +466,13 @@ export function VenueBuilder({
             seats: Array.from({ length: row.seatCount ?? 0 }).map(
               (_, seatIndex) => {
                 const key = seatKey(row.id, seatIndex + 1);
-                const assignedSection = assignments[key];
+                const assignedSection = assignments[key] ?? 'G';
                 return {
                   id: key,
-                  color: assignedSection
-                    ? (colorMap.get(assignedSection) ?? '#e5e7eb')
-                    : '#e5e7eb',
+                  color: colorMap.get(assignedSection) ?? '#e5e7eb',
                   selected: selectedSeats.has(key),
                   onClick: () => toggleSeat(key),
-                  ariaLabel: `${row.label} seat ${seatIndex + 1}, ${
-                    assignedSection ?? 'unassigned; defaults to G'
-                  }`,
+                  ariaLabel: `${row.label} seat ${seatIndex + 1}, ${assignedSection}`,
                 };
               }
             ),

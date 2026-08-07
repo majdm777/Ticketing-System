@@ -52,15 +52,17 @@ legend (colored dot + section name + price) below, separated by a border.
 
 ## Sizing behavior (do not break this)
 
-- Seat dot size is calculated from the **container width** and the **row with
-  the most seats**, so the whole map fits on screen — **no horizontal
-  scrolling** (no `overflow-x-auto` anywhere).
-- The same size is applied to **every row** for consistency.
-- A `ResizeObserver` recalculates on resize, so it adapts responsively
-  (especially mobile).
-- Seat size is clamped to `MIN_SEAT` (24px) and `MAX_SEAT` (44px). For very
-  wide rows where even 24px would overflow, the fitted size wins so nothing
-  scrolls off-screen.
+- **One seat size for the whole map**: the container width (minus the row
+  label column) is divided by the seat count of the **widest row**, gaps
+  included, and that single size is applied to **every seat in every row**.
+- The map is capped at `MAX_SEAT` (44px) so sparse rows stay compact on wide
+  screens. There is **no minimum** — the map must always fit, so on a narrow
+  screen a long row simply uses smaller seats.
+- The entire map shares the **container width** (`w-full`); by construction no
+  row is ever wider than the container, so there is **no horizontal
+  scrolling** and **no `overflow-x-auto` anywhere**.
+- A `ResizeObserver` recalculates the size on resize, so it adapts
+  responsively (especially mobile).
 - Row label column is 32px + 8px gap to the seats (`LABEL_WIDTH`, `LABEL_GAP`);
   seat gap is 20% of the seat size (`GAP_RATIO`).
 
@@ -77,5 +79,6 @@ Callers build a `SeatMapRow[]` from their own source:
 ## Verification
 
 After touching the seat map: `npx tsc --noEmit` and `npm run lint` must pass.
-Check the live page at both mobile (~375px) and desktop widths to confirm
-nothing overflows horizontally.
+Check the live page at both mobile (~375px) and desktop widths to confirm the
+whole map fits the container, all rows use the same seat size, and nothing
+overflows horizontally.

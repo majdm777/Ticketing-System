@@ -36,6 +36,32 @@ export type PublicEvent = {
   seatGroups: PublicSeatGroup[];
 };
 
+export type PublicEndedEvent = {
+  id: string;
+  name: string;
+  description: string | null;
+  startsAt: Date;
+  slug: string;
+  status: EventStatus;
+  venue: {
+    name: string;
+    address: string;
+  };
+  endedReason: 'canceled' | 'ended';
+};
+
+// Public visibility contract:
+// - not_found — unknown slug, or an event that was never published (DRAFT).
+//   Both return the identical 404; the app never reveals whether an
+//   unpublished event exists at a given slug.
+// - live — PUBLISHED and startsAt still in the future: details + seat map.
+// - ended — was published but is now CLOSED, CANCELED, or already started:
+//   details only, no selectable seats and no request form.
+export type PublicEventLookup =
+  | { outcome: 'not_found' }
+  | { outcome: 'live'; event: PublicEvent }
+  | { outcome: 'ended'; event: PublicEndedEvent };
+
 function compareRowLabels(a: string, b: string): number {
   const aNum = Number(a);
   const bNum = Number(b);
@@ -49,7 +75,9 @@ function compareSeatNumbers(a: string, b: string): number {
   return Number(a) - Number(b) || a.localeCompare(b);
 }
 
-export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | null> {
+export async function getPublicEventBySlug(
+  slug: string
+): Promise<PublicEventLookup> {
   const event = await prisma.event.findUnique({
     where: { slug },
     select: {
@@ -77,8 +105,29 @@ export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | 
     },
   });
 
-  if (!event || event.status !== EventStatus.PUBLISHED) {
-    return null;
+  if (!event || event.status === EventStatus.DRAFT) {
+    return { outcome: 'not_found' };
+  }
+
+  if (
+    event.status === EventStatus.CLOSED ||
+    event.status === EventStatus.CANCELED ||
+    event.startsAt < new Date()
+  ) {
+    return {
+      outcome: 'ended',
+      event: {
+        id: event.id,
+        name: event.name,
+        description: event.description,
+        startsAt: event.startsAt,
+        slug: event.slug,
+        status: event.status,
+        venue: event.venue,
+        endedReason:
+          event.status === EventStatus.CANCELED ? 'canceled' : 'ended',
+      },
+    };
   }
 
   const sectionNames = event.eventSeats.map((eventSeat) => eventSeat.venueSeat.section.name);
@@ -123,12 +172,15 @@ export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | 
   }
 
   return {
-    id: event.id,
-    name: event.name,
-    description: event.description,
-    startsAt: event.startsAt,
-    slug: event.slug,
-    venue: event.venue,
-    seatGroups,
+    outcome: 'live',
+    event: {
+      id: event.id,
+      name: event.name,
+      description: event.description,
+      startsAt: event.startsAt,
+      slug: event.slug,
+      venue: event.venue,
+      seatGroups,
+    },
   };
 }

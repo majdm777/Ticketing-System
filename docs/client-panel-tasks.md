@@ -47,9 +47,11 @@ existing admin-side building blocks instead of duplicating them.
    `inputMode="tel"`, `autoComplete` — so the right virtual keyboard appears.
    Full rules in AGENTS.md.
 9. **Public access boundary**: the event slug is the entire access boundary —
-   no auth on the client panel. A missing or not-`PUBLISHED` event must return
-   an **identical 404** either way; never reveal that an unpublished event
-   exists at a given slug.
+   no auth on the client panel. A missing slug or a **never-published (DRAFT)**
+   event must return an **identical 404** either way; never reveal that an
+   unpublished event exists at a given slug. Events that **were** published and
+   are now `CLOSED`/`CANCELED`/already started are **not** 404 — they render an
+   "event has ended / been canceled" state (see Task B2).
 10. **Elderly-friendly copy**: short sentences, plain wording, one clear next
     step per screen. The reference code must be shown large and unmissable so
     it can be read or copied by hand.
@@ -76,16 +78,21 @@ do not change it once A commits.
 ### Task A1: Public event data + event page
 
 - `src/lib/events.ts` — add a public read helper `getPublicEventBySlug(slug)`
-  (or a new `src/lib/public-events.ts`): returns `null` for a missing OR
-  not-`PUBLISHED` event (identical 404 per Shared Convention #9). When found,
-  return the event details plus its seat map:
-  - `name`, `description`, `startsAt`, `venue` (name, address)
-  - `sections` — name + price, formatted with `formatPrice` from
-    `src/lib/currency.ts`
-  - seats grouped by row: `row`, `number`, `sectionName`, and `status` —
-    derived from `EventSeat` joined to `VenueSeat` → `VenueSection`
-  - a section → color map using `buildSectionColorMap` from
-    `src/lib/section-colors.ts`
+  (or a new `src/lib/public-events.ts`) returning a discriminated union:
+  - `{ outcome: 'not_found' }` for a missing OR never-published (DRAFT) event
+    (identical 404 per Shared Convention #9).
+  - `{ outcome: 'live', event }` for a `PUBLISHED` event whose `startsAt` is
+    still in the future — event details plus its seat map:
+    - `name`, `description`, `startsAt`, `venue` (name, address)
+    - `sections` — name + price, formatted with `formatPrice` from
+      `src/lib/currency.ts`
+    - seats grouped by row: `row`, `number`, `sectionName`, and `status` —
+      derived from `EventSeat` joined to `VenueSeat` → `VenueSection`
+    - a section → color map using `buildSectionColorMap` from
+      `src/lib/section-colors.ts`
+  - `{ outcome: 'ended', event }` for a `CLOSED`/`CANCELED` event, or a
+    `PUBLISHED` event whose `startsAt` has passed — event details only, no
+    seats, no request form (the page shows the ended/canceled state).
 - `src/app/e/[slug]/page.tsx` — render the public event page:
   - Event details: name, date/time via `formatDate` (`src/lib/format.ts`),
     venue name + address, description, and a section legend showing each
@@ -94,11 +101,15 @@ do not change it once A commits.
     used in `src/lib/venues.ts` (`getVenueForEdit` builder data). Only
     `AVAILABLE` seats are tappable/selectable; `PENDING`, `BOOKED`, and
     `CANCELED` seats render as taken and are disabled.
-  - When the helper returns `null`, call `notFound()` — no alternate
-    "event not found" page with different content.
+  - When the helper returns `not_found`, call `notFound()` — no alternate
+    "event not found" page with different content. When it returns `ended`,
+    render a clear "this event has ended / been canceled" state with no
+    selectable seats and no request form.
 
 **Acceptance criteria**
-- [ ] Unknown slug → 404; unpublished (DRAFT/CLOSED) slug → identical 404
+- [ ] Unknown slug → 404; never-published (DRAFT) slug → identical 404
+- [ ] CLOSED / CANCELED / finished (past `startsAt`) events → readable ended
+      state, not 404, with no selectable seats
 - [ ] Published event → details + seat map with prices and section colors
 - [ ] Only `AVAILABLE` seats are selectable; taken seats are visually distinct
       and disabled
@@ -112,8 +123,14 @@ do not change it once A commits.
   - Same guarded `updateMany` shape as the existing `requestSeatOnlineCode`
     (`WHERE status = 'AVAILABLE'`), but `caseType: PAY_AT_DOOR`, **no reference
     code**, and `expiresAt = now + env.pendingDoorExpiryHours` (default 24h).
-  - Both request functions must reject requests for a `CANCELED` event (guard
-    on the event's status in the same transaction).
+  - Both request functions must run inside one `prisma.$transaction` and
+    reject requests for an event that is not bookable. The event must be
+    `status = PUBLISHED` and **not** `CLOSED` or `CANCELED`, and its
+    `startsAt` must still be in the future — checked within the same
+    transaction as the guarded seat `updateMany`. A public Server Action can
+    be invoked without the page ever rendering, so the mutation itself is the
+    enforcement point, never the UI. (Same condition as the
+    `{ outcome: 'live' }` contract from A1 / Task B2.)
 - `src/lib/validation/bookings.ts` — add a Zod schema for the public request:
   `eventId`, `eventSeatId`, `userName`, `userPhone` (native phone shape),
   `caseType` restricted to `ONLINE_CODE | PAY_AT_DOOR` only — `GUEST` is
@@ -137,9 +154,9 @@ do not change it once A commits.
        `/e/[slug]/booking/[bookingId]` (the route B owns).
      - PAY_AT_DOOR — "we're holding your seat for you — pay at the door",
        plus the same status-page link.
-  5. On failure (seat no longer available, event canceled, validation error)
-     show the error inline and re-render the seat map so the attendee can pick
-     another seat.
+  5. On failure (seat no longer available, event canceled/closed, event
+     already started, validation error) show the error inline and re-render
+     the seat map so the attendee can pick another seat.
 
 **Acceptance criteria**
 - [ ] ONLINE_CODE request: seat `AVAILABLE → PENDING`, booking created
@@ -150,6 +167,11 @@ do not change it once A commits.
       other gets a typed "seat no longer available" error (guarded update)
 - [ ] Public request with `caseType: GUEST` is rejected
 - [ ] Requesting on a `CANCELED` event is rejected
+- [ ] Requesting on a `CLOSED` event is rejected
+- [ ] Requesting on an event whose `startsAt` has passed is rejected
+- [ ] The event-state guard lives in the transaction (Server Action is
+      callable without rendering `/e/[slug]`), so the above hold even when
+      the page is bypassed
 - [ ] Success screens link to `/e/[slug]/booking/[bookingId]`
 - [ ] `npx tsc --noEmit` and `npm run lint` pass
 - [ ] Commit A2 when done — A is finished
@@ -163,8 +185,11 @@ do not change it once A commits.
 - `src/app/e/[slug]/booking/[bookingId]/page.tsx` — render the status of one
   booking:
   - Look up the booking by `bookingId` AND verify it belongs to the event at
-    `[slug]`; a mismatch, unknown id, or not-`PUBLISHED` event returns an
-    identical `notFound()`.
+    `[slug]`; a mismatch or unknown id returns an identical `notFound()`. A
+    never-published (DRAFT) event also returns `notFound()`, while
+    `CLOSED`/`CANCELED`/finished events still render (attendees may be
+    checking an ended event's booking) — same visibility contract as the
+    event page (Shared Convention #9 / Task B2).
   - Elderly-friendly status screens with one clear next step each:
     - `PENDING` + ONLINE_CODE — show the reference code again, "we're waiting
       for your payment — once it's confirmed this page will update".
@@ -195,8 +220,10 @@ do not change it once A commits.
 - **Closed/canceled events on the public page**: when the event is `CLOSED`,
   `CANCELED`, or `startsAt` has passed, `/e/[slug]` shows a clear
   "this event has ended / been canceled" state — no selectable seats, no
-  request form. (A `CANCELED` event is not 404 — it was published and the
-  attendee must see why they can't book.)
+  request form. This is delivered by the `{ outcome: 'ended' }` branch of
+  `getPublicEventBySlug` built in A1; A's page must already render it. (A
+  `CANCELED` event is not 404 — it was published and the attendee must see why
+  they can't book.)
 - **Re-check on submit**: if the seat the attendee picked is taken by the time
   they submit, the typed error from A2 must re-render the seat map with the
   seat now shown as taken.
@@ -226,7 +253,9 @@ do not change it once A commits.
       in the admin panel → open both status pages and see `CONFIRMED` →
       verify seat states in the DB (`EventSeat.status` / `Booking.status`
       stayed consistent)
-- [ ] Unpublished or unknown slug returns the same 404 as an unpublished event
+- [ ] Unpublished (DRAFT) or unknown slug returns the same 404; previously
+      published events that are CLOSED/CANCELED/finished show the ended state
+      instead of 404
 
 ### Out of scope (do NOT build here)
 

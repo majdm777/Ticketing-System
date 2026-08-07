@@ -110,7 +110,7 @@ section VenueSection @relation(fields: [sectionId, venueId], references: [id, ve
 
 eventSeats EventSeat[]
 
-@@unique([venueId, row, number, sectionId])
+@@unique([venueId, row, number])
 @@unique([id, venueId])
 }
 

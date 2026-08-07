@@ -10,13 +10,13 @@ import { formatPrice } from '@/lib/currency';
 // here shows up everywhere. Callers supply the seat data and click behavior;
 // this component only draws.
 //
-// Seat size is derived from the container width and the row with the most
-// seats, so the whole map fits on screen without horizontal scrolling and
-// every row uses the same seat size for consistency. The size is clamped
-// between MIN_SEAT and MAX_SEAT to keep seats tappable/legible; for very wide
-// rows where even MIN_SEAT would overflow, the fitted size wins so nothing
-// ever scrolls off-screen. A ResizeObserver recalculates it on resize.
-const MIN_SEAT = 24;
+// One seat size is calculated for the whole map: the container width is
+// divided by the seat count of the widest row (gaps included), so every row
+// fits the container width and the map never scrolls horizontally. The size is
+// capped at MAX_SEAT so sparse rows stay compact on wide screens; there is no
+// minimum, because the map must always fit. The same size is used for every
+// seat in every row, and a ResizeObserver recalculates it on resize so it
+// adapts responsively (especially mobile).
 const MAX_SEAT = 44;
 const GAP_RATIO = 0.2;
 const LABEL_WIDTH = 32;
@@ -72,50 +72,43 @@ export function SeatMap({
   const availForSeats = Math.max(1, availW - LABEL_WIDTH - LABEL_GAP);
   const exactSize =
     availForSeats / (maxSeats + (maxSeats - 1) * GAP_RATIO);
-  let seatSize = Math.min(MAX_SEAT, Math.max(MIN_SEAT, exactSize));
+  const seatSize = Math.min(MAX_SEAT, exactSize);
   const seatGap = seatSize * GAP_RATIO;
-  const rowWidth = maxSeats * seatSize + (maxSeats - 1) * seatGap;
-  if (rowWidth > availForSeats) {
-    seatSize = Math.min(MAX_SEAT, exactSize);
-  }
-  const finalGap = seatSize * GAP_RATIO;
 
   return (
     <div ref={containerRef} className="space-y-4">
-      <div className="flex justify-center">
-        <div className="flex flex-col items-center gap-2">
-          {rows.map((row) => (
-            <div key={row.label} className="flex items-center gap-2">
-              <span className="w-8 shrink-0 text-right text-xs text-zinc-500">
-                {row.label}
-              </span>
-              <div className="flex" style={{ gap: finalGap }}>
-                {row.seats.map((seat) => (
-                  <button
-                    key={seat.id}
-                    type="button"
-                    disabled={seat.disabled}
-                    onClick={seat.onClick}
-                    aria-pressed={seat.selected}
-                    aria-label={seat.ariaLabel}
-                    className={`shrink-0 rounded-full border transition-colors ${
-                      seat.selected
-                        ? 'border-black ring-2 ring-offset-1 ring-black'
-                        : seat.disabled
-                          ? 'cursor-not-allowed border-zinc-300'
-                          : 'border-zinc-300'
-                    }`}
-                    style={{
-                      width: seatSize,
-                      height: seatSize,
-                      backgroundColor: seat.color,
-                    }}
-                  />
-                ))}
-              </div>
+      <div className="flex w-full max-w-full flex-col items-center gap-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center gap-2">
+            <span className="w-8 shrink-0 text-right text-xs text-zinc-500">
+              {row.label}
+            </span>
+            <div className="flex" style={{ gap: seatGap }}>
+              {row.seats.map((seat) => (
+                <button
+                  key={seat.id}
+                  type="button"
+                  disabled={seat.disabled}
+                  onClick={seat.onClick}
+                  aria-pressed={seat.selected}
+                  aria-label={seat.ariaLabel}
+                  className={`shrink-0 rounded-full border transition-colors ${
+                    seat.selected
+                      ? 'border-black ring-2 ring-offset-1 ring-black'
+                      : seat.disabled
+                        ? 'cursor-not-allowed border-zinc-300'
+                        : 'border-zinc-300'
+                  }`}
+                  style={{
+                    width: seatSize,
+                    height: seatSize,
+                    backgroundColor: seat.color,
+                  }}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
       {legend && legend.length > 0 ? (

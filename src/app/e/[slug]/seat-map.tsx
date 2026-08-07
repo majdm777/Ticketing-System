@@ -7,7 +7,10 @@ import type { PublicSeatGroup } from '@/lib/public-events';
 
 // Feeds the shared SeatMap component with the event's live seat data. A single
 // venue row can hold seats from more than one section, so rows are merged
-// across sections first and then rendered once, in row order.
+// across sections first and then rendered once, in row order. Merging keys on
+// (row, number) is safe because VenueSeat guarantees the coordinate is unique
+// per venue (@@unique([venueId, row, number])) — a number can never appear
+// twice in a row, even across sections.
 
 function compareRowLabels(a: string, b: string): number {
   const aNum = Number(a);

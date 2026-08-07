@@ -170,7 +170,8 @@ first — they are the source of truth for the domain and schema.
    add sections with a per-seat price in whole US dollars, each with rows and
    seats-per-row (e.g. section "Floor", $5, 3 rows, 8 seats/row). Creates the
    `Venue`, its `VenueSection`s, and all `VenueSeat` rows in one transaction.
-   Seat uniqueness is `(venueId, row, number, sectionId)` — a duplicate
+   Seat uniqueness is `(venueId, row, number)` — a coordinate (row, number)
+   cannot repeat anywhere in the venue, even across sections. A duplicate
    layout must return a typed error.
 2. Event creation — form: pick an existing venue, name, description,
    `startsAt`, initial status (DRAFT/PUBLISHED). Slug: auto-generate from the
@@ -189,8 +190,8 @@ first — they are the source of truth for the domain and schema.
 **Acceptance criteria**
 - [ ] Creating a venue with a layout creates all seats (count matches
       sections × rows × seats-per-row)
-- [ ] Duplicate `(row, number, sectionId)` within a venue is rejected with a
-      typed error
+- [ ] Duplicate `(row, number)` within a venue is rejected with a
+      typed error — a coordinate cannot repeat even across sections
 - [ ] Creating an event auto-clones every venue seat into an `EventSeat` with
       the correct `venueId`, all `AVAILABLE`
 - [ ] Event slug is unique; DRAFT/PUBLISHED/CLOSED/CANCELED transitions work

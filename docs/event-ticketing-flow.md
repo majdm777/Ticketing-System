@@ -73,11 +73,15 @@ Venue
 
 1. Attendee flow — no authentication:
    1. Attendee opens the event's link (`/e/<slug>`).
-   2. The app looks up the event by slug and checks it is `PUBLISHED`.
-   3. If found and published, the seat map and event details are shown.
-   4. If not found or not published, an identical 404 is returned either
-      way — the app never reveals whether an unpublished event exists at a
-      given slug.
+   2. The app looks up the event by slug.
+   3. If the slug is unknown, or the event was never published (DRAFT), an
+      identical 404 is returned either way — the app never reveals whether an
+      unpublished event exists at a given slug.
+   4. If the event is `PUBLISHED` and `startsAt` is still in the future, the
+      seat map and event details are shown and seats can be requested.
+   5. If the event was published but is now `CLOSED`, `CANCELED`, or has
+      already started, a clear "this event has ended / been canceled" state is
+      shown — details only, no selectable seats and no request form.
 2. Admin flow — shared password:
    1. Admin submits their name and the shared admin password to a login
       endpoint.
@@ -140,6 +144,11 @@ Venue
   (e.g. `WHERE status = 'AVAILABLE'`), never a separate read followed by a
   write. This is what prevents two simultaneous requests for the same seat
   from both succeeding.
+- Bookability guard for public requests (cases 1 and 2): a request is rejected
+  if, at request time, the event is not `PUBLISHED`, or is `CLOSED`/`CANCELED`,
+  or its `startsAt` has already passed. This is enforced inside the same
+  transaction as the seat lock (the public Server Action can be invoked
+  without the page rendering, so the mutation — not the UI — is the guard).
 - Reference codes: generated from a 31-character alphabet that excludes
   visually-ambiguous characters (no `0`/`O`, `1`/`I`/`L`), since attendees
   may read or copy them by hand. Uniqueness is checked against all
@@ -168,12 +177,14 @@ Venue
 ### Enums
 
 #### EventStatus
+
 - DRAFT
 - PUBLISHED
 - CLOSED
 - CANCELED
 
 #### SeatStatus
+
 - AVAILABLE
 - PENDING
 - BOOKED
