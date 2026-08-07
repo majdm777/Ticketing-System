@@ -55,6 +55,10 @@ existing admin-side building blocks instead of duplicating them.
     it can be read or copied by hand.
 11. **Verification**: after your feature, run `npx tsc --noEmit` and
     `npm run lint` and confirm they pass.
+12. **Shared seat map**: the venue seat map is a single shared component in
+    `src/components/seat-map.tsx` used by both the admin venue builder and the
+    event page. Never duplicate its rendering; make visual changes there so
+    both panels stay in sync. See `docs/seat-map-fragment.md`.
 
 ### Agreed route contract (so both teammates link correctly)
 

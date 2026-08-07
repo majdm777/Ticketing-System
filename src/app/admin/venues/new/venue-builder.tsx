@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { buildSectionColorMap } from '@/lib/section-colors';
 import { formatPrice } from '@/lib/currency';
+import { SeatMap } from '@/components/seat-map';
 import {
   createVenueAction,
   updateVenueAction,
@@ -459,67 +460,39 @@ export function VenueBuilder({
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-bold mb-4">Seat map</h2>
-        <div className="flex flex-col items-center gap-2 mb-4">
-          {rows.map((row) => (
-            <div key={row.id} className="flex items-center gap-2">
-              <span className="w-8 text-xs text-gray-500 text-right">{row.label}</span>
-              <div className="flex gap-1">
-                {Array.from({ length: row.seatCount ?? 0 }).map((_, seatIndex) => {
-                  const key = seatKey(row.id, seatIndex + 1);
-                  const isSelected = selectedSeats.has(key);
-                  const assignedSection = assignments[key];
-                  const backgroundColor = assignedSection
-                    ? colorMap.get(assignedSection)
-                    : undefined;
-
-                  return (
-                    <button
-                      key={seatIndex}
-                      type="button"
-                      onClick={() => toggleSeat(key)}
-                      aria-pressed={isSelected}
-                      aria-label={`${row.label} seat ${seatIndex + 1}, ${
-                        assignedSection ?? 'unassigned; defaults to G'
-                      }`}
-                      title={`${row.label}${seatIndex + 1}${
-                        assignedSection ? ` — ${assignedSection}` : ''
-                      }`}
-                      className={`w-6 h-6 rounded-full border transition ${
-                        isSelected
-                          ? 'ring-2 ring-offset-1 ring-black border-black'
-                          : 'border-gray-300'
-                      }`}
-                      style={{
-                        backgroundColor: backgroundColor ?? '#e5e7eb',
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {sectionNames.length > 0 && (
-          <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-200">
-            {sectionNames.map((sectionName) => {
-              const price = sectionName === 'G' ? gPrice : (sectionPrices[sectionName] ?? '');
-              const priceNumber = validPrice(price);
-              return (
-                <div key={sectionName} className="flex items-center gap-1.5 text-sm text-gray-600">
-                  <span
-                    className="w-3 h-3 rounded-full inline-block"
-                    style={{ backgroundColor: colorMap.get(sectionName) }}
-                  />
-                  {sectionName}
-                  {priceNumber !== null ? (
-                    <span className="text-gray-400">· {formatPrice(priceNumber)}</span>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <SeatMap
+          rows={rows.map((row) => ({
+            label: row.label,
+            seats: Array.from({ length: row.seatCount ?? 0 }).map(
+              (_, seatIndex) => {
+                const key = seatKey(row.id, seatIndex + 1);
+                const assignedSection = assignments[key];
+                return {
+                  id: key,
+                  color: assignedSection
+                    ? (colorMap.get(assignedSection) ?? '#e5e7eb')
+                    : '#e5e7eb',
+                  selected: selectedSeats.has(key),
+                  onClick: () => toggleSeat(key),
+                  ariaLabel: `${row.label} seat ${seatIndex + 1}, ${
+                    assignedSection ?? 'unassigned; defaults to G'
+                  }`,
+                };
+              }
+            ),
+          }))}
+          legend={sectionNames.map((sectionName) => {
+            const price =
+              sectionName === 'G'
+                ? gPrice
+                : (sectionPrices[sectionName] ?? '');
+            return {
+              name: sectionName,
+              color: colorMap.get(sectionName) ?? '#e5e7eb',
+              price: validPrice(price),
+            };
+          })}
+        />
       </div>
 
       {result.error && (
