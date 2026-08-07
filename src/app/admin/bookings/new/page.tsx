@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { EventStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 import { GuestBookingForm } from './guest-booking-form';
 
@@ -18,6 +19,10 @@ export default async function NewGuestBookingPage({
         include: { venue: true },
       })
     : null;
+
+  if (event) {
+    await expirePastDuePendingBookings(event.id);
+  }
 
   const seats = event
     ? await prisma.eventSeat.findMany({

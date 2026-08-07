@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 import { PendingBookingActions } from './pending-booking-actions';
 
@@ -32,6 +33,10 @@ export default async function AdminBookingsPage({
         include: { venue: true },
       })
     : null;
+
+  if (event) {
+    await expirePastDuePendingBookings(event.id);
+  }
 
   const bookings = event
     ? await prisma.booking.findMany({

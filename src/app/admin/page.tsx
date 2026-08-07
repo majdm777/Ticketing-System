@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 const statusStyles: Record<EventStatus, string> = {
   DRAFT: 'bg-zinc-100 text-zinc-600',
@@ -12,6 +13,8 @@ const statusStyles: Record<EventStatus, string> = {
 };
 
 export default async function AdminDashboardPage() {
+  await expirePastDuePendingBookings();
+
   const events = await prisma.event.findMany({
     orderBy: { startsAt: 'desc' },
     include: { venue: true },

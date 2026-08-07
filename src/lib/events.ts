@@ -42,7 +42,7 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
             JOIN "EventSeat" es ON es."id" = b."eventSeatId" AND es."eventId" = b."eventId"
             JOIN "VenueSeat" vse ON vse."id" = es."venueSeatId" AND vse."venueId" = es."venueId"
             JOIN "VenueSection" s ON s."id" = vse."sectionId" AND s."venueId" = vse."venueId"
-            WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."eventId" IN (${Prisma.join(eventIds)})
+            WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."eventId" IN (${Prisma.join(eventIds)}) AND b."caseType" = 'ONLINE_CODE'::"CaseType"
             GROUP BY b."eventId"
           `,
         );

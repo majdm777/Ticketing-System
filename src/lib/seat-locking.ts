@@ -297,29 +297,45 @@ export async function createGuestBooking(params: {
   }
 }
 
-export async function expireBookingIfPastDue(bookingId: string) {
+// Expires every PENDING booking whose hold window has passed (and frees its
+// seat back to AVAILABLE). Called lazily from the pages that show seat or
+// booking state, so stale holds clear automatically on the next visit with no
+// admin action and no background job. Pass `eventId` to limit the sweep to one
+// event. All transitions stay guarded (status = PENDING) and run in one
+// transaction, so a booking that was confirmed or cancelled in the meantime is
+// never touched.
+export async function expirePastDuePendingBookings(
+  eventId?: string,
+): Promise<number> {
   return prisma.$transaction(async (tx) => {
-    const result = await tx.booking.updateMany({
+    const pastDueBookings = await tx.booking.findMany({
       where: {
-        id: bookingId,
         status: BookingStatus.PENDING,
         expiresAt: { lt: new Date() },
+        ...(eventId ? { eventId } : {}),
       },
-      data: {
-        status: BookingStatus.EXPIRED,
-      },
+      select: { id: true, eventSeatId: true },
     });
 
-    if (result.count === 0) {
-      return false;
+    if (pastDueBookings.length === 0) {
+      return 0;
     }
 
-    const booking = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    const bookingIds = pastDueBookings.map((b) => b.id);
+    const eventSeatIds = pastDueBookings.map((b) => b.eventSeatId);
+
+    await tx.booking.updateMany({
+      where: {
+        id: { in: bookingIds },
+        status: BookingStatus.PENDING,
+      },
+      data: { status: BookingStatus.EXPIRED },
+    });
 
     await tx.eventSeat.updateMany({
       where: {
-        id: booking.eventSeatId,
-        eventId: booking.eventId,
+        id: { in: eventSeatIds },
+        eventId,
         status: SeatStatus.PENDING,
       },
       data: {
@@ -332,6 +348,6 @@ export async function expireBookingIfPastDue(bookingId: string) {
       },
     });
 
-    return true;
+    return bookingIds.length;
   });
 }

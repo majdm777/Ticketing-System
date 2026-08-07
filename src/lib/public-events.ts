@@ -1,6 +1,7 @@
 import { EventStatus, SeatStatus } from '@prisma/client';
 
 import { prisma } from './prisma';
+import { expirePastDuePendingBookings } from './seat-locking';
 import { buildSectionColorMap } from './section-colors';
 
 export type PublicSeat = {
@@ -86,6 +87,18 @@ function compareSeatNumbers(a: string, b: string): number {
 export async function getPublicEventBySlug(
   slug: string
 ): Promise<PublicEventLookup> {
+  // Lazily expire this event's past-due pending holds before loading the map,
+  // so a stale lock frees itself on the attendee's visit (no admin action,
+  // no background job). Only when the event is actually live — DRAFT, ended,
+  // and unknown slugs stay read-only.
+  const probe = await prisma.event.findFirst({
+    where: { slug },
+    select: { id: true, status: true, startsAt: true },
+  });
+  if (probe && probe.status === EventStatus.PUBLISHED && probe.startsAt > new Date()) {
+    await expirePastDuePendingBookings(probe.id);
+  }
+
   const event = await prisma.event.findUnique({
     where: { slug },
     select: {
