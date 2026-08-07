@@ -19,22 +19,38 @@ function withConnectionDefaults(raw: string): string {
   return url.toString();
 }
 
-function resolveDatabaseUrl(raw: string | undefined): string {
-  if (raw === undefined) {
+function createPrismaClient(): PrismaClient {
+  const rawDatabaseUrl = process.env.DATABASE_URL;
+  if (rawDatabaseUrl === undefined) {
     throw new Error('DATABASE_URL is not set.');
   }
-  return withConnectionDefaults(raw);
-}
-
-const databaseUrl = resolveDatabaseUrl(process.env.DATABASE_URL);
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    datasources: { db: { url: databaseUrl } },
+  const client = new PrismaClient({
+    datasources: { db: { url: withConnectionDefaults(rawDatabaseUrl) } },
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = client;
+  }
+  return client;
 }
+
+let prismaClient: PrismaClient | undefined;
+
+function getPrismaClient(): PrismaClient {
+  if (!prismaClient) {
+    prismaClient = globalForPrisma.prisma ?? createPrismaClient();
+  }
+  return prismaClient;
+}
+
+// The client is created lazily, on first query access, so `next build` can
+// collect page data without a database connection — DATABASE_URL is only
+// required (and checked) when a query actually runs. A Proxy keeps every
+// existing `prisma.<delegate>` call site unchanged.
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, prop);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+});
