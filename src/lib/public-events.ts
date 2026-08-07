@@ -23,6 +23,13 @@ export type PublicSeatGroup = {
   rows: PublicSeatRow[];
 };
 
+export type PublicGapSeat = {
+  id: string;
+  venueSeatId: string;
+  row: string;
+  number: string;
+};
+
 export type PublicEvent = {
   id: string;
   name: string;
@@ -34,6 +41,7 @@ export type PublicEvent = {
     address: string;
   };
   seatGroups: PublicSeatGroup[];
+  gapSeats: PublicGapSeat[];
 };
 
 export type PublicEndedEvent = {
@@ -130,12 +138,32 @@ export async function getPublicEventBySlug(
     };
   }
 
-  const sectionNames = event.eventSeats.map((eventSeat) => eventSeat.venueSeat.section.name);
+  // Gap seats have no section; collect them flat so the map can still render
+  // the blocked-out positions while keeping section grouping intact.
+  const gapSeats: PublicGapSeat[] = [];
+
+  const sectionNames: string[] = [];
+  for (const eventSeat of event.eventSeats) {
+    const { row, number, section } = eventSeat.venueSeat;
+    if (eventSeat.status === SeatStatus.GAP || !section) {
+      gapSeats.push({
+        id: eventSeat.id,
+        venueSeatId: eventSeat.venueSeat.id,
+        row,
+        number,
+      });
+      continue;
+    }
+    if (!sectionNames.includes(section.name)) {
+      sectionNames.push(section.name);
+    }
+  }
   const colors = buildSectionColorMap(sectionNames);
 
   const groupsBySection = new Map<string, PublicSeatGroup>();
   for (const eventSeat of event.eventSeats) {
     const { row, number, section } = eventSeat.venueSeat;
+    if (eventSeat.status === SeatStatus.GAP || !section) continue;
 
     let group = groupsBySection.get(section.name);
     if (!group) {
@@ -181,6 +209,7 @@ export async function getPublicEventBySlug(
       slug: event.slug,
       venue: event.venue,
       seatGroups,
+      gapSeats,
     },
   };
 }

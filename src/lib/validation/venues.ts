@@ -3,7 +3,8 @@ import { z } from 'zod';
 const seatSchema = z.object({
   row: z.string().trim().min(1).max(10),
   number: z.string().trim().min(1).max(10),
-  section: z.string().trim().min(1, 'Every seat must belong to a section.').max(60),
+  section: z.string().trim().min(1).max(60).optional(),
+  gap: z.boolean().optional(),
 });
 
 const sectionSchema = z.object({

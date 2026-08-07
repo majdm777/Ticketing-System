@@ -78,7 +78,7 @@ async function createEventWithSeats(params: {
 
       const venueSeats = await tx.venueSeat.findMany({
         where: { venueId },
-        select: { id: true },
+        select: { id: true, gap: true },
       });
 
       if (venueSeats.length > 0) {
@@ -87,7 +87,7 @@ async function createEventWithSeats(params: {
             eventId: event.id,
             venueSeatId: seat.id,
             venueId,
-            status: SeatStatus.AVAILABLE,
+            status: seat.gap ? SeatStatus.GAP : SeatStatus.AVAILABLE,
           })),
         });
       }

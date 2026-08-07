@@ -58,7 +58,9 @@ export default async function AdminDashboardPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {events.map((event) => {
             const seatCounts = seatCountsByEvent.get(event.id) ?? {};
-            const totalSeats = Object.values(seatCounts).reduce((sum, count) => sum + count, 0);
+            const totalSeats =
+              Object.values(seatCounts).reduce((sum, count) => sum + count, 0) -
+              (seatCounts[SeatStatus.GAP] ?? 0);
             const available = seatCounts[SeatStatus.AVAILABLE] ?? 0;
             const pending = seatCounts[SeatStatus.PENDING] ?? 0;
             const booked = seatCounts[SeatStatus.BOOKED] ?? 0;

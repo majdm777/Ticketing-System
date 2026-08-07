@@ -215,12 +215,12 @@ export async function cancelBooking(params: {
 
 export async function createGuestBooking(params: {
   eventId: string;
-  venueSeatId: string;
+  venueSeatIds: string[];
   userName: string;
   userPhone: string;
   adminId: string;
-}): Promise<ActionResult<{ bookingId: string }>> {
-  const { eventId, venueSeatId, userName, userPhone, adminId } = params;
+}): Promise<ActionResult<{ bookingIds: string[] }>> {
+  const { eventId, venueSeatIds, userName, userPhone, adminId } = params;
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -235,7 +235,7 @@ export async function createGuestBooking(params: {
       const seatResult = await tx.eventSeat.updateMany({
         where: {
           eventId,
-          venueSeatId,
+          venueSeatId: { in: venueSeatIds },
           status: SeatStatus.AVAILABLE,
           event: { status: { not: EventStatus.CANCELED } },
         },
@@ -249,17 +249,23 @@ export async function createGuestBooking(params: {
         },
       });
 
-      if (seatResult.count === 0) {
-        return { ok: false, error: 'Seat is no longer available.' };
+      // Atomic claim: if every requested seat did not flip in this one
+      // update, one of them was taken in the meantime. Throw so the
+      // transaction rolls back the seats that did flip (returning here
+      // would commit them).
+      if (seatResult.count !== venueSeatIds.length) {
+        throw new SeatUnavailableError(
+          'One or more selected seats are no longer available.',
+        );
       }
 
-      const eventSeat = await tx.eventSeat.findUniqueOrThrow({
-        where: { eventId_venueSeatId: { eventId, venueSeatId } },
+      const eventSeats = await tx.eventSeat.findMany({
+        where: { eventId, venueSeatId: { in: venueSeatIds } },
         select: { id: true },
       });
 
-      const booking = await tx.booking.create({
-        data: {
+      await tx.booking.createMany({
+        data: eventSeats.map((eventSeat) => ({
           eventId,
           eventSeatId: eventSeat.id,
           userName,
@@ -268,13 +274,25 @@ export async function createGuestBooking(params: {
           status: BookingStatus.CONFIRMED,
           confirmedByAdmin: adminId,
           confirmedAt: new Date(),
+        })),
+      });
+
+      const createdBookings = await tx.booking.findMany({
+        where: {
+          eventId,
+          eventSeatId: { in: eventSeats.map((eventSeat) => eventSeat.id) },
+          caseType: CaseType.GUEST,
         },
         select: { id: true },
       });
 
-      return { ok: true, bookingId: booking.id };
+      return { ok: true, bookingIds: createdBookings.map((b) => b.id) };
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof SeatUnavailableError) {
+      return { ok: false, error: error.message };
+    }
+
     return { ok: false, error: 'Could not create guest booking.' };
   }
 }

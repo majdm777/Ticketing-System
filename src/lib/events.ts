@@ -63,7 +63,9 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
 
   return events.map((event) => {
     const counts = seatCountsByEvent.get(event.id) ?? {};
-    const totalSeats = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    const totalSeats =
+      Object.values(counts).reduce((sum, count) => sum + count, 0) -
+      (counts[SeatStatus.GAP] ?? 0);
 
     return {
       id: event.id,

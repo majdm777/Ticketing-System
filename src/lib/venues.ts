@@ -13,7 +13,8 @@ type SectionsAndSeats = {
 
 // Guards shared by create and update: seat numbers must be positive integers,
 // contiguous (1..N) within each row, and unique by (row, number) regardless of
-// section, and every seat must point at a section that has a price. Cheaper and
+// section; gap seats belong to no section, every other seat must point at a
+// section that has a price, and at least one seat must be bookable. Cheaper and
 // clearer than letting the @@unique constraint on VenueSeat reject the whole
 // batch with a raw DB error, and guarantees the builder/loader round-trip
 // without dropping or synthesizing seats.
@@ -22,6 +23,9 @@ function validateSectionsAndSeats(input: SectionsAndSeats): string | null {
 
   if (seats.length === 0) {
     return 'At least one seat is required.';
+  }
+  if (!seats.some((seat) => !seat.gap)) {
+    return 'At least one seat must not be a gap.';
   }
 
   const sectionNames = new Set(sections.map((s) => s.name));
@@ -32,7 +36,10 @@ function validateSectionsAndSeats(input: SectionsAndSeats): string | null {
     if (!Number.isInteger(number) || number < 1) {
       return `Seat ${seat.row}${seat.number} has an invalid number — seat numbers must be positive whole numbers.`;
     }
-    if (!sectionNames.has(seat.section)) {
+    if (!seat.gap && !seat.section) {
+      return `Seat ${seat.row}${seat.number} needs a section.`;
+    }
+    if (!seat.gap && !sectionNames.has(seat.section ?? '')) {
       return `Seat ${seat.row}${seat.number} references a section ("${seat.section}") that has no price.`;
     }
     const key = JSON.stringify([seat.row, seat.number]);
@@ -77,7 +84,8 @@ async function createSectionsAndSeats(
       venueId,
       row: seat.row,
       number: seat.number,
-      sectionId: sectionIdByName.get(seat.section) ?? '',
+      gap: seat.gap ?? false,
+      sectionId: seat.gap ? null : (sectionIdByName.get(seat.section ?? '') ?? ''),
     })),
   });
 }
@@ -184,6 +192,7 @@ export type VenueForEdit = {
     address: string;
     rows: { id: string; label: string; seatCount: number }[];
     assignments: Record<string, string>;
+    gaps: string[];
     sectionPrices: Record<string, string>;
     gPrice: string;
   };
@@ -205,6 +214,7 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
         select: {
           row: true,
           number: true,
+          gap: true,
           section: { select: { name: true } },
         },
         orderBy: [{ row: 'asc' }, { number: 'asc' }],
@@ -301,11 +311,16 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
   const rowIdByLabel = new Map(rows.map((row) => [row.label, row.id]));
 
   const assignments: Record<string, string> = {};
+  const gaps: string[] = [];
   for (const seat of venue.seats) {
     const rowId = rowIdByLabel.get(seat.row);
     const number = Number(seat.number);
     if (!rowId || !Number.isInteger(number) || number < 1) continue;
-    assignments[`${rowId}__${number}`] = seat.section.name;
+    if (seat.gap || !seat.section) {
+      gaps.push(`${rowId}__${number}`);
+    } else {
+      assignments[`${rowId}__${number}`] = seat.section.name;
+    }
   }
 
   return {
@@ -319,6 +334,7 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
       address: venue.address,
       rows,
       assignments,
+      gaps,
       sectionPrices,
       gPrice,
     },

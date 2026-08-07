@@ -118,9 +118,13 @@ first — they are the source of truth for the domain and schema.
    - `cancelBooking({ bookingId })` — booking `→ CANCELLED` (set `cancelledAt`)
      and seat `→ AVAILABLE`, resetting seat hold fields (`bookedByName`,
      `bookedByPhone`, `referenceCode`, `pendingSince`, `expiresAt`).
-   - `createGuestBooking({ eventId, venueSeatId, userName, userPhone,
-     adminId })` — seat `AVAILABLE → BOOKED`, create a `Booking` directly
-     `CONFIRMED` with `caseType: GUEST`, `confirmedByAdmin`, `confirmedAt`.
+   - `createGuestBooking({ eventId, venueSeatIds, userName, userPhone,
+     adminId })` — one seat each `AVAILABLE → BOOKED`, create a `Booking` per
+     seat directly `CONFIRMED` with `caseType: GUEST`, `confirmedByAdmin`,
+     `confirmedAt`. All seats share the same guest name/phone. The claim is
+     atomic: one guarded `updateMany` over all `venueSeatIds`, and if the
+     affected count doesn't equal the requested count, throw so the
+     transaction rolls back the seats that did flip.
    - Each returns `{ ok: true, ... }` or `{ ok: false, error }`. A failed
      guarded update (0 rows affected — seat already taken / booking already
      handled) must return an error, not throw.
@@ -132,10 +136,12 @@ first — they are the source of truth for the domain and schema.
    (so the admin can match it against the external payment note). Buttons:
    **Confirm** and **Cancel**. Confirmed rows show `referenceCode`,
    `confirmedByAdmin`, `confirmedAt`.
-3. Guest booking page — read `?eventId=`, render the seat map grouped by
-   section/row (from `EventSeat.venueSeat`), showing each seat's status.
-   Selecting an `AVAILABLE` seat + entering name/phone submits the guest
-   booking. Already-taken seats are disabled.
+3. Guest booking page — read `?eventId=`, render the shared seat map (see
+   `docs/seat-map-fragment.md`) from `EventSeat.venueSeat`. Select **one or
+   more** `AVAILABLE` seats (up to 10) + enter name/phone submits the guest
+   booking; each seat becomes its own `CONFIRMED` booking under that name.
+   Already-taken seats are disabled; gap seats (`EventSeat.status = GAP`)
+   render as empty slots and are never selectable.
 4. Server Actions — call the `seat-locking` helpers, validate inputs with Zod,
    return typed results the pages can display.
 
@@ -147,6 +153,10 @@ first — they are the source of truth for the domain and schema.
       wins, the other gets a typed error (guarded update)
 - [ ] Guest booking on an AVAILABLE seat succeeds and is `CONFIRMED` with
       `caseType: GUEST`; a seat already PENDING/BOOKED cannot be guest-booked
+- [ ] Multi-seat guest booking (2–10 seats, one name/phone) creates one
+      `CONFIRMED` booking per seat and flips each seat to `BOOKED`; if any
+      seat in the batch is taken, the whole batch rolls back (no partial
+      booking)
 - [ ] Retained CANCELLED/EXPIRED booking history does not block a new booking
       for the same seat
 - [ ] `npx tsc --noEmit` and `npm run lint` pass
@@ -173,6 +183,12 @@ first — they are the source of truth for the domain and schema.
    Seat uniqueness is `(venueId, row, number)` — a coordinate (row, number)
    cannot repeat anywhere in the venue, even across sections. A duplicate
    layout must return a typed error.
+   **Gap seats**: selected seats can also be **Marked as gap** instead of
+   assigned to a section — a gap keeps its `(row, number)` position (so the
+   map layout and numbering stay intact) but is stored with `gap: true` and a
+   null `sectionId`, is never cloned as an available event seat, and can never
+   be booked. Gap seats still count toward the row's contiguous `1..N`
+   numbering; at least one non-gap seat is required.
 2. Event creation — form: pick an existing venue, name, description,
    `startsAt`, initial status (DRAFT/PUBLISHED). Slug: auto-generate from the
    name (e.g. `jazz-under-the-stars`); ensure uniqueness (append a suffix on
@@ -204,8 +220,8 @@ first — they are the source of truth for the domain and schema.
 
 **Behavior**
 1. List all events with venue, date, and status.
-2. Per event, show counts: total seats, available/pending/booked, and the
-   number of bookings needing action (PENDING).
+2. Per event, show counts: total seats (excluding gaps), available/pending/booked,
+   and the number of bookings needing action (PENDING).
 3. Link through to `/admin/bookings?eventId=...` and
    `/admin/bookings/new?eventId=...` (A's pages).
 
