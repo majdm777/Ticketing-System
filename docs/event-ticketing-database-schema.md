@@ -170,7 +170,7 @@ bookings Booking[]
 
 @@unique([eventId, venueSeatId])
 @@unique([eventId, id])
-@@index([status, expiresAt]) // used by the expiry sweep job: "find all PENDING seats past expiresAt"
+@@index([status, expiresAt]) // used by the lazy expiry sweep: "find all PENDING seats past expiresAt"
 }
 
 // ============================================================

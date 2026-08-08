@@ -135,7 +135,15 @@ first — they are the source of truth for the domain and schema.
    booking show `userName`, `userPhone`, `caseType`, and its `referenceCode`
    (so the admin can match it against the external payment note). Buttons:
    **Confirm** and **Cancel**. Confirmed rows show `referenceCode`,
-   `confirmedByAdmin`, `confirmedAt`.
+   `confirmedByAdmin`, `confirmedAt`. Below the list, render the shared seat
+   map in **read-only** mode (see `docs/seat-map-fragment.md`) showing the
+   whole event's occupancy — BOOKED seats `#18181b`, PENDING holds `#f97316`,
+   CANCELED/freed seats `#e4e4e7`, available seats in their section color —
+   with a legend. When the list holds 10+ bookings, the list area (mobile
+   cards and desktop table) gets `max-h-[560px] overflow-y-auto` so the map
+   stays reachable without a huge page. Runs
+   `expirePastDuePendingBookings(event.id)` first so past-due holds expire and
+   free their seats before the map/state is read.
 3. Guest booking page — read `?eventId=`, render the shared seat map (see
    `docs/seat-map-fragment.md`) from `EventSeat.venueSeat`. Select **one or
    more** `AVAILABLE` seats (up to 10) + enter name/phone submits the guest
@@ -201,7 +209,11 @@ first — they are the source of truth for the domain and schema.
    `startsAt` is still in the future — it flips the event to `CANCELED`, every
    seat to `CANCELED`, and PENDING/CONFIRMED bookings to `CANCELLED`.
    No booking logic here — that's A's slice.
-4. Server Actions — Zod-validate, run in transactions, return typed results.
+4. Venue list — each venue card shows a 3-column stat grid (Capacity /
+   Sections / Events) from `_count` on `VenueSeat` (seats only) and `Event`,
+   plus the **Guest booking** and **View bookings** links. Venue create form
+   lives under `src/app/admin/venues/new/venue-builder.tsx`.
+5. Server Actions — Zod-validate, run in transactions, return typed results.
 
 **Acceptance criteria**
 - [ ] Creating a venue with a layout creates all seats (count matches
@@ -216,17 +228,40 @@ first — they are the source of truth for the domain and schema.
 
 ### Task B2: Dashboard
 
-- `src/app/admin/page.tsx`
+- `src/app/admin/page.tsx` — reads `getDashboardStats(eventIds)` from
+  `src/lib/events.ts`
 
 **Behavior**
-1. List all events with venue, date, and status.
-2. Per event, show counts: total seats (excluding gaps), available/pending/booked,
-   and the number of bookings needing action (PENDING).
-3. Link through to `/admin/bookings?eventId=...` and
-   `/admin/bookings/new?eventId=...` (A's pages).
+1. Show **only PUBLISHED events** — DRAFT/CLOSED/CANCELED events never appear
+   here (they are managed under `/admin/events`). If there are none, show a
+   "No published events yet" empty state.
+2. Top: four summary cards scoped to those published event ids
+   (`getDashboardStats`):
+   - **Revenue** — sum of the confirmed bookings' section prices, counting
+     **ONLINE_CODE only** (GUEST and PAY_AT_DOOR bookings are excluded — the
+     dashboard reports what was actually paid via the payment note, not
+     doorstep/guest bookings)
+   - **Confirmed** — number of CONFIRMED bookings
+   - **Pending holds** — number of PENDING bookings
+   - **Occupancy** — confirmed seats / bookable seats (gaps excluded)
+   (Stats must be scoped to the published event ids — never a global query.
+   With no published events, skip the aggregate query entirely.)
+3. **Needs attention**: a queue of PENDING bookings across the published
+   events (newest first, capped at 20), each with inline **Confirm** /
+   **Cancel** actions that also `revalidatePath('/admin')` so the summary
+   updates immediately.
+4. **Events at a glance**: one card per published event showing venue, date,
+   an occupancy bar (confirmed/bookable, gap-free), a pending-holds pill, and
+   links to `/admin/bookings?eventId=...` and
+   `/admin/bookings/new?eventId=...`.
 
 **Acceptance criteria**
-- [ ] Counts are correct against the seeded data
+- [ ] Only PUBLISHED events and stats scoped to them show — DRAFT/CLOSED/
+      CANCELED events are absent
+- [ ] Revenue counts only CONFIRMED ONLINE_CODE bookings (GUEST and
+      PAY_AT_DOOR excluded); occupancy excludes gap seats
+- [ ] Confirming/cancelling from Needs attention updates the summary cards
+      without a manual refresh
 - [ ] Links reach A's pages with the event pre-selected
 - [ ] Commit B2 — the panel is complete
 
@@ -246,5 +281,7 @@ first — they are the source of truth for the domain and schema.
 ### Out of scope (do NOT build here)
 
 - WhatsApp ticket sending / resend (external integration)
-- The scheduled expiry sweep job (separate task)
+- A scheduled cron-style expiry sweep job (the **lazy** on-demand sweep —
+  `expirePastDuePendingBookings` — is built as part of A2 and runs from the
+  pages that read seat/booking state; a background job is still separate)
 - Multi-admin / role hierarchy

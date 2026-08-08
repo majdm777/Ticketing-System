@@ -36,18 +36,16 @@ function OccupancyBar({ sold, total }: { sold: number; total: number }) {
 export default async function AdminDashboardPage() {
   await expirePastDuePendingBookings();
 
-  const [stats, events] = await Promise.all([
-    getDashboardStats(),
-    prisma.event.findMany({
-      where: { status: EventStatus.PUBLISHED },
-      orderBy: { startsAt: 'desc' },
-      include: { venue: true },
-    }),
-  ]);
+  const events = await prisma.event.findMany({
+    where: { status: EventStatus.PUBLISHED },
+    orderBy: { startsAt: 'desc' },
+    include: { venue: true },
+  });
 
   const eventIds = events.map((event) => event.id);
 
-  const [seatGroups, pendingBookingGroups, pendingBookings] = await Promise.all([
+  const [stats, seatGroups, pendingBookingGroups, pendingBookings] = await Promise.all([
+    getDashboardStats(eventIds),
     prisma.eventSeat.groupBy({
       by: ['eventId', 'status'],
       where: eventIds.length > 0 ? { eventId: { in: eventIds } } : undefined,

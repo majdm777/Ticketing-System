@@ -9,7 +9,7 @@ async function getVenues() {
     orderBy: { createdAt: 'desc' },
     include: {
       sections: { select: { name: true, price: true } },
-      _count: { select: { seats: true } },
+      _count: { select: { seats: true, events: true } },
     },
   });
 
@@ -19,6 +19,7 @@ async function getVenues() {
       name: venue.name,
       address: venue.address,
       capacity: venue._count.seats,
+      eventCount: venue._count.events,
       sections: venue.sections.map((s) => ({ name: s.name, price: s.price })),
     };
   });
@@ -55,7 +56,7 @@ export default async function VenuesPage() {
               </div>
               <p className="text-gray-600 text-sm mb-4">{venue.address}</p>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-2 gap-3 mb-4 sm:grid-cols-3">
                 <div className="border border-gray-200 rounded-md p-3">
                   <div className="text-xs uppercase text-gray-500 tracking-wide">Capacity</div>
                   <div className="text-xl font-bold">{venue.capacity}</div>
@@ -63,6 +64,10 @@ export default async function VenuesPage() {
                 <div className="border border-gray-200 rounded-md p-3">
                   <div className="text-xs uppercase text-gray-500 tracking-wide">Sections</div>
                   <div className="text-xl font-bold">{venue.sections.length}</div>
+                </div>
+                <div className="border border-gray-200 rounded-md p-3">
+                  <div className="text-xs uppercase text-gray-500 tracking-wide">Events</div>
+                  <div className="text-xl font-bold">{venue.eventCount}</div>
                 </div>
               </div>
 

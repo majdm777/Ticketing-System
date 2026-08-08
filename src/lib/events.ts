@@ -105,25 +105,35 @@ export type DashboardStats = {
   pendingSeats: number;
 };
 
-// Cross-event aggregates for the admin dashboard. Revenue uses the same rule
+// Cross-event aggregates for the admin dashboard, scoped to the given events
+// (the dashboard passes its published event ids). Revenue uses the same rule
 // as getEventsWithStats: confirmed ONLINE_CODE bookings only (GUEST bookings
 // are placed directly by an admin and PAY_AT_DOOR isn't matched to an in-app
 // payment, so both are excluded). Gap seats never count as bookable capacity.
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(eventIds: string[]): Promise<DashboardStats> {
+  const hasEvents = eventIds.length > 0;
+
   const [revenueRows, confirmedTickets, pendingHolds, seatGroups] =
     await Promise.all([
-      prisma.$queryRaw<{ revenue: number }[]>(Prisma.sql`
-        SELECT COALESCE(SUM(s."price"), 0)::int AS "revenue"
-        FROM "Booking" b
-        JOIN "EventSeat" es ON es."id" = b."eventSeatId" AND es."eventId" = b."eventId"
-        JOIN "VenueSeat" vse ON vse."id" = es."venueSeatId" AND vse."venueId" = es."venueId"
-        JOIN "VenueSection" s ON s."id" = vse."sectionId" AND s."venueId" = vse."venueId"
-        WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."caseType" = ${CaseType.ONLINE_CODE}::"CaseType"
-      `),
-      prisma.booking.count({ where: { status: BookingStatus.CONFIRMED } }),
-      prisma.booking.count({ where: { status: BookingStatus.PENDING } }),
+      hasEvents
+        ? prisma.$queryRaw<{ revenue: number }[]>(Prisma.sql`
+            SELECT COALESCE(SUM(s."price"), 0)::int AS "revenue"
+            FROM "Booking" b
+            JOIN "EventSeat" es ON es."id" = b."eventSeatId" AND es."eventId" = b."eventId"
+            JOIN "VenueSeat" vse ON vse."id" = es."venueSeatId" AND vse."venueId" = es."venueId"
+            JOIN "VenueSection" s ON s."id" = vse."sectionId" AND s."venueId" = vse."venueId"
+            WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."eventId" IN (${Prisma.join(eventIds)}) AND b."caseType" = ${CaseType.ONLINE_CODE}::"CaseType"
+          `)
+        : Promise.resolve([] as { revenue: number }[]),
+      prisma.booking.count({
+        where: { status: BookingStatus.CONFIRMED, eventId: { in: eventIds } },
+      }),
+      prisma.booking.count({
+        where: { status: BookingStatus.PENDING, eventId: { in: eventIds } },
+      }),
       prisma.eventSeat.groupBy({
         by: ['status'],
+        where: { eventId: { in: eventIds } },
         _count: { _all: true },
       }),
     ]);
