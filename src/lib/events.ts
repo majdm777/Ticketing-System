@@ -95,3 +95,50 @@ export async function getEventsWithStats(): Promise<EventWithStats[]> {
     };
   });
 }
+
+export type DashboardStats = {
+  revenue: number;
+  confirmedTickets: number;
+  pendingHolds: number;
+  bookableSeats: number;
+  bookedSeats: number;
+  pendingSeats: number;
+};
+
+// Cross-event aggregates for the admin dashboard. Revenue uses the same rule
+// as getEventsWithStats: confirmed ONLINE_CODE bookings only (GUEST bookings
+// are placed directly by an admin and PAY_AT_DOOR isn't matched to an in-app
+// payment, so both are excluded). Gap seats never count as bookable capacity.
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const [revenueRows, confirmedTickets, pendingHolds, seatGroups] =
+    await Promise.all([
+      prisma.$queryRaw<{ revenue: number }[]>(Prisma.sql`
+        SELECT COALESCE(SUM(s."price"), 0)::int AS "revenue"
+        FROM "Booking" b
+        JOIN "EventSeat" es ON es."id" = b."eventSeatId" AND es."eventId" = b."eventId"
+        JOIN "VenueSeat" vse ON vse."id" = es."venueSeatId" AND vse."venueId" = es."venueId"
+        JOIN "VenueSection" s ON s."id" = vse."sectionId" AND s."venueId" = vse."venueId"
+        WHERE b."status" = ${BookingStatus.CONFIRMED}::"BookingStatus" AND b."caseType" = ${CaseType.ONLINE_CODE}::"CaseType"
+      `),
+      prisma.booking.count({ where: { status: BookingStatus.CONFIRMED } }),
+      prisma.booking.count({ where: { status: BookingStatus.PENDING } }),
+      prisma.eventSeat.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+    ]);
+
+  const counts: Partial<Record<SeatStatus, number>> = {};
+  for (const group of seatGroups) {
+    counts[group.status] = group._count._all;
+  }
+
+  return {
+    revenue: revenueRows[0]?.revenue ?? 0,
+    confirmedTickets,
+    pendingHolds,
+    bookableSeats: countBookableSeats(counts),
+    bookedSeats: counts[SeatStatus.BOOKED] ?? 0,
+    pendingSeats: counts[SeatStatus.PENDING] ?? 0,
+  };
+}

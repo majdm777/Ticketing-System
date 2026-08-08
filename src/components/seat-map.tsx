@@ -32,7 +32,7 @@ export type SeatMapSeat = {
   disabled?: boolean;
   number?: string;
   gap?: boolean;
-  onClick: () => void;
+  onClick?: () => void;
   ariaLabel: string;
 };
 
@@ -115,11 +115,13 @@ export function SeatMap({
   legend,
   stageLabel = 'STAGE',
   gapEditable = false,
+  readOnly = false,
 }: {
   rows: SeatMapRow[];
   legend?: SeatMapLegendItem[];
   stageLabel?: string;
   gapEditable?: boolean;
+  readOnly?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(0);
@@ -195,6 +197,7 @@ export function SeatMap({
                         showNumbers={showNumbers}
                         numberFontSize={numberFontSize}
                         gapEditable={gapEditable}
+                        readOnly={readOnly}
                       />
                     ))}
                     <BlockGap width={aisleWidth} />
@@ -206,6 +209,7 @@ export function SeatMap({
                         showNumbers={showNumbers}
                         numberFontSize={numberFontSize}
                         gapEditable={gapEditable}
+                        readOnly={readOnly}
                       />
                     ))}
                     <BlockGap width={aisleWidth} />
@@ -217,6 +221,7 @@ export function SeatMap({
                         showNumbers={showNumbers}
                         numberFontSize={numberFontSize}
                         gapEditable={gapEditable}
+                        readOnly={readOnly}
                       />
                     ))}
                   </>
@@ -229,6 +234,7 @@ export function SeatMap({
                       showNumbers={showNumbers}
                       numberFontSize={numberFontSize}
                       gapEditable={gapEditable}
+                      readOnly={readOnly}
                     />
                   ))
                 )}
@@ -272,12 +278,14 @@ function SeatNode({
   showNumbers,
   numberFontSize,
   gapEditable,
+  readOnly,
 }: {
   seat: SeatMapSeat;
   seatSize: number;
   showNumbers: boolean;
   numberFontSize: number;
   gapEditable: boolean;
+  readOnly: boolean;
 }) {
   if (seat.gap && !gapEditable) {
     // A gap seat keeps its position in the row (so numbering and the
@@ -297,6 +305,7 @@ function SeatNode({
       seatSize={seatSize}
       showNumbers={showNumbers}
       numberFontSize={numberFontSize}
+      readOnly={readOnly}
     />
   );
 }
@@ -306,13 +315,56 @@ function SeatButton({
   seatSize,
   showNumbers,
   numberFontSize,
+  readOnly,
 }: {
   seat: SeatMapSeat;
   seatSize: number;
   showNumbers: boolean;
   numberFontSize: number;
+  readOnly: boolean;
 }) {
   const isGap = Boolean(seat.gap);
+
+  const style = isGap
+    ? {
+        width: seatSize,
+        height: seatSize,
+        background:
+          'repeating-linear-gradient(45deg, #fafafa 0px, #fafafa 2px, #e4e4e7 2px, #e4e4e7 4px)',
+      }
+    : {
+        width: seatSize,
+        height: seatSize,
+        backgroundColor: seat.color,
+      };
+
+  // Read-only maps (e.g. admin booking review) are display-only: no button
+  // semantics, no tab stop, no cursor. The number still picks a readable
+  // text color from the seat background.
+  if (readOnly) {
+    return (
+      <span
+        aria-label={seat.ariaLabel}
+        className={`flex shrink-0 items-center justify-center rounded-full border ${
+          isGap ? 'border-dashed border-zinc-400' : 'border-zinc-300'
+        }`}
+        style={style}
+      >
+        {showNumbers && seat.number && !isGap ? (
+          <span
+            aria-hidden="true"
+            style={{
+              fontSize: numberFontSize,
+              color: seatTextColor(seat.color),
+            }}
+          >
+            {seat.number}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -329,20 +381,7 @@ function SeatButton({
               ? 'cursor-not-allowed border-zinc-300'
               : 'border-zinc-300'
       }`}
-      style={
-        isGap
-          ? {
-              width: seatSize,
-              height: seatSize,
-              background:
-                'repeating-linear-gradient(45deg, #fafafa 0px, #fafafa 2px, #e4e4e7 2px, #e4e4e7 4px)',
-            }
-          : {
-              width: seatSize,
-              height: seatSize,
-              backgroundColor: seat.color,
-            }
-      }
+      style={style}
     >
       {showNumbers && seat.number && !isGap ? (
         <span

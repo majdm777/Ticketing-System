@@ -39,6 +39,7 @@ export async function confirmBookingAction(formData: FormData): Promise<BookingA
   });
 
   revalidatePath('/admin/bookings');
+  revalidatePath('/admin');
   return result.ok ? { ok: true } : result;
 }
 
@@ -66,6 +67,7 @@ export async function cancelBookingAction(formData: FormData): Promise<BookingAc
   const result = await cancelBooking({ bookingId: parsed.data.bookingId });
 
   revalidatePath('/admin/bookings');
+  revalidatePath('/admin');
   return result.ok ? { ok: true } : result;
 }
 
@@ -103,5 +105,6 @@ export async function createGuestBookingAction(
 
   revalidatePath('/admin/bookings');
   revalidatePath('/admin/bookings/new');
+  revalidatePath('/admin');
   return result.ok ? { ok: true } : result;
 }
