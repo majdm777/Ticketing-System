@@ -48,14 +48,14 @@ export default async function AdminDashboardPage() {
     getDashboardStats(eventIds),
     prisma.eventSeat.groupBy({
       by: ['eventId', 'status'],
-      where: eventIds.length > 0 ? { eventId: { in: eventIds } } : undefined,
+      where: { eventId: { in: eventIds } },
       _count: { _all: true },
     }),
     prisma.booking.groupBy({
       by: ['eventId'],
       where: {
         status: BookingStatus.PENDING,
-        ...(eventIds.length > 0 ? { eventId: { in: eventIds } } : {}),
+        eventId: { in: eventIds },
       },
       _count: { _all: true },
     }),
@@ -115,7 +115,7 @@ export default async function AdminDashboardPage() {
       ) : (
         <>
           <section aria-label="Summary">
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {summary.map((stat) => (
                 <div key={stat.label} className="rounded-lg border border-zinc-200 bg-white p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">{stat.label}</dt>
@@ -197,7 +197,7 @@ export default async function AdminDashboardPage() {
                       {pending > 0 ? (
                         <Link
                           href={`/admin/bookings?eventId=${event.id}&status=PENDING`}
-                          className="inline-flex w-fit items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700"
+                          className="inline-flex h-11 w-fit items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700"
                         >
                           {pending} pending
                         </Link>

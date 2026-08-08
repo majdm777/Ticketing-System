@@ -26,8 +26,13 @@ up everywhere. Editing the rendering in a page file instead silently forks the
 callers.
 
 **Data changes** (adding/removing rows, seat counts, section assignments,
-prices) need no component work — callers read the same venue/seat records
-from the database, so saving the venue immediately reflects everywhere.
+prices) need no component work — the component draws whatever seat data it is
+given. Layout changes do **not** propagate to already-created events: an event
+clones its `EventSeat` rows once at creation, and venue-layout edits are
+blocked once any event uses the venue (see `src/lib/venues.ts`). Only metadata
+read live through the shared `VenueSeat` relation (section name/price) stays in
+sync for existing events; adding/removing rows, seat counts, or section
+assignments never appear in an event that already exists.
 
 ## Contract
 

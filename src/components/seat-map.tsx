@@ -106,8 +106,12 @@ function seatTextColor(color: string): string {
   const r = parseInt(hex.slice(0, 2), 16);
   const g = parseInt(hex.slice(2, 4), 16);
   const b = parseInt(hex.slice(4, 6), 16);
+  // Threshold lowered from 160 so the pending-orange status color (#f97316,
+  // luminance ~145) flips to dark — white on it is only ~2.8:1, dark is
+  // ~6.4:1. No palette or status color sits between 140 and 160, so all other
+  // colors keep their existing text color.
   const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-  return luminance > 160 ? '#18181b' : '#ffffff';
+  return luminance > 140 ? '#18181b' : '#ffffff';
 }
 
 export function SeatMap({
@@ -344,6 +348,7 @@ function SeatButton({
   if (readOnly) {
     return (
       <span
+        role="img"
         aria-label={seat.ariaLabel}
         className={`flex shrink-0 items-center justify-center rounded-full border ${
           isGap ? 'border-dashed border-zinc-400' : 'border-zinc-300'

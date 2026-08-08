@@ -170,7 +170,7 @@ bookings Booking[]
 
 @@unique([eventId, venueSeatId])
 @@unique([eventId, id])
-@@index([status, expiresAt]) // used by the lazy expiry sweep: "find all PENDING seats past expiresAt"
+@@index([status, expiresAt])
 }
 
 // ============================================================
@@ -208,4 +208,5 @@ event Event @relation(fields: [eventId], references: [id])
 eventSeat EventSeat @relation(fields: [eventId, eventSeatId], references: [eventId, id])
 
 @@index([eventId, status]) // admin dashboard: "show all PENDING bookings for this event"
+@@index([status, expiresAt]) // lazy expiry sweep: "find all PENDING bookings past expiresAt"
 }

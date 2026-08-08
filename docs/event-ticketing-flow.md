@@ -142,7 +142,7 @@ Venue
   2. Attendee pays externally, using the code as a payment note.
   3. Admin matches the code to a payment and confirms → seat transitions
      `PENDING → BOOKED`, booking transitions `PENDING → CONFIRMED`.
-   4. If unconfirmed for `PENDING_ONLINE_EXPIRY_HOURS` (default 3h), the hold
+  4. If unconfirmed for `PENDING_ONLINE_EXPIRY_HOURS` (default 3h), the hold
       expires: the booking goes `PENDING → EXPIRED` and the seat back to
       `AVAILABLE`, freeing it for a new request. Expiry is a **lazy sweep**
       (`expirePastDuePendingBookings`), not a background job — it runs from

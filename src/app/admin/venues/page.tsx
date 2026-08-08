@@ -56,7 +56,7 @@ export default async function VenuesPage() {
               </div>
               <p className="text-gray-600 text-sm mb-4">{venue.address}</p>
 
-              <div className="grid grid-cols-2 gap-3 mb-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-3">
                 <div className="border border-gray-200 rounded-md p-3">
                   <div className="text-xs uppercase text-gray-500 tracking-wide">Capacity</div>
                   <div className="text-xl font-bold">{venue.capacity}</div>
