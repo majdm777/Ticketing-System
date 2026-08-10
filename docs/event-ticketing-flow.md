@@ -147,8 +147,9 @@ Venue
       `AVAILABLE`, freeing it for a new request. Expiry is a **lazy sweep**
       (`expirePastDuePendingBookings`), not a background job — it runs from
       the pages that read seat or booking state (public event page, admin
-      bookings page) and expires every past-due PENDING hold in one guarded
-      transaction (cheap count-first fast path when nothing is past due).
+      bookings page, admin dashboard) and expires every past-due PENDING hold
+      in one guarded transaction (cheap count-first fast path when nothing is
+      past due).
 - Lifecycle, case 2 — pay at the door:
   - Same shape as case 1, but no reference code is generated (nothing to
     match against an external payment) and the expiry window is longer

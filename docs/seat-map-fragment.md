@@ -137,10 +137,14 @@ Callers build a `SeatMapRow[]` from their own source:
 - The event page and guest-booking form use `buildSeatMapData` (which merges
   all sections' rows into one row-ordered grid, because a single venue row can
   hold seats from more than one section).
-- A seat should be `disabled` when it is not selectable (e.g. taken): the
-  button is inert, its border is `border-zinc-300`, and its seat number is
-  `#71717a`. The event page also marks the currently selected seat with the
-  black ring.
+- In an interactive map (`readOnly` false), a seat should be `disabled` when
+  it is not selectable (e.g. taken): the button is inert, its border is
+  `border-zinc-300`, and its seat number is `#71717a`. The event page also
+  marks the currently selected seat with the black ring.
+- A `readOnly` map (admin bookings review) has no disabled state: every
+  non-gap seat renders as a labeled `<span role="img">` in its status color,
+  and the seat number uses `seatTextColor(seat.color)` (auto-picked dark or
+  light for contrast) — never the interactive disabled number color.
 
 ## Verification
 

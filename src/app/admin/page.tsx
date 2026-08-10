@@ -16,8 +16,8 @@ const statusStyles: Record<EventStatus, string> = {
   CANCELED: 'bg-red-100 text-red-700',
 };
 
-function OccupancyBar({ sold, total }: { sold: number; total: number }) {
-  const pct = total > 0 ? Math.round((sold / total) * 100) : 0;
+function OccupancyBar({ occupied, total }: { occupied: number; total: number }) {
+  const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="h-1.5 w-full max-w-40 overflow-hidden rounded-full bg-zinc-200">
@@ -27,7 +27,7 @@ function OccupancyBar({ sold, total }: { sold: number; total: number }) {
         />
       </div>
       <span className="text-sm text-zinc-600">
-        {sold} of {total} sold
+        {occupied} of {total} occupied
       </span>
     </div>
   );
@@ -174,7 +174,7 @@ export default async function AdminDashboardPage() {
               {events.map((event) => {
                 const seatCounts = seatCountsByEvent.get(event.id) ?? {};
                 const totalSeats = countBookableSeats(seatCounts);
-                const sold =
+                const occupied =
                   (seatCounts[SeatStatus.BOOKED] ?? 0) + (seatCounts[SeatStatus.PENDING] ?? 0);
                 const pending = pendingBookingsByEvent.get(event.id) ?? 0;
 
@@ -205,7 +205,7 @@ export default async function AdminDashboardPage() {
                     </div>
 
                     <div className="mt-3">
-                      <OccupancyBar sold={sold} total={totalSeats} />
+                      <OccupancyBar occupied={occupied} total={totalSeats} />
                     </div>
 
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
