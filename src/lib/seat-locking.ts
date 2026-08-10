@@ -103,11 +103,13 @@ export async function requestSeats(params: {
         async (tx) => {
           await assertEventBookable(tx, eventId);
 
-          // The count and the inserts below share one transaction, so two
-          // requests for the same phone cannot both slip past the cap. Only
-          // currently active holds count: PENDING rows past expiresAt are not
-          // swept until the lazy expiry job runs, but they no longer hold a
-          // seat, so they must not consume the cap.
+          // The count and the inserts share one transaction, and the
+          // transaction runs at Serializable isolation, so two concurrent
+          // requests for the same phone cannot both read the same hold count
+          // and slip past the cap — one is aborted with P2034 and retried.
+          // Only currently active holds count: PENDING rows past expiresAt are
+          // not swept until the lazy expiry job runs, but they no longer hold
+          // a seat, so they must not consume the cap.
           const now = new Date();
           const pendingHolds = await tx.booking.count({
             where: {
@@ -197,19 +199,27 @@ export async function requestSeats(params: {
 
           return { referenceCode, bookings };
         },
-        { maxWait: 5000, timeout: 15000 },
+        {
+          maxWait: 5000,
+          timeout: 15000,
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        },
       );
     } catch (error) {
+      // Retry the two abort causes this flow can race into:
+      // P2002 — two requests won the same reference code (UNIQUE insert); and
+      // P2034 — a Serializable write/read conflict, e.g. two same-phone
+      // requests both reading the hold count before either inserts.
       const collided =
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002';
+        (error.code === 'P2002' || error.code === 'P2034');
       if (!collided) {
         throw error;
       }
     }
   }
 
-  throw new Error('Could not reserve a unique reference code, please retry');
+  throw new Error('Could not complete the seat request, please retry');
 }
 
 export async function confirmOnlineCodeBooking(params: {
