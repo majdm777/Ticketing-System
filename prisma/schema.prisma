@@ -147,7 +147,9 @@ model Booking {
   caseType CaseType
   status   BookingStatus @default(PENDING)
 
-  referenceCode String? @unique
+  // Shared across the bookings of one multi-seat request — the attendee uses
+  // it once as the payment note. Not unique: several seats can share a code.
+  referenceCode String?
 
   confirmedByAdmin String?
   confirmedAt      DateTime?
@@ -163,4 +165,24 @@ model Booking {
   updatedAt DateTime @updatedAt
 
   @@index([eventId, status])
+  @@index([status, expiresAt])
+  @@index([referenceCode])
+}
+
+// One row per reference code ever issued. The UNIQUE constraint on `code` is
+// the concurrency-safe guarantee behind ONLINE_CODE groups: a code is reserved
+// (inserted here) inside the same transaction that creates the bookings, so
+// two concurrent requests can never both win the same code — the loser hits a
+// unique violation and the whole request transaction retries with a fresh
+// code. Rows persist after a booking is confirmed or expires, so a code is
+// never reused.
+//
+// Growth policy: codes are 8 characters from a 31-character alphabet (~850B
+// keyspace) so this table can grow indefinitely without pruning. Rows are never
+// deleted: a code still referenced by a confirmed booking must stay reserved
+// for payment matching, so pruning is unsafe — code length is the lever
+// instead (see generateReferenceCode in src/lib/tickets.ts).
+model ReferenceCode {
+  code      String   @id
+  createdAt DateTime @default(now())
 }

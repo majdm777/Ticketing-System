@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { formatDate } from '@/lib/format';
 import { getPublicEventBySlug } from '@/lib/public-events';
 
-import { SeatMap } from './seat-map';
+import { BookingFlow } from './booking-flow';
 
 export default async function PublicEventPage({
   params,
@@ -82,15 +82,14 @@ export default async function PublicEventPage({
         ) : null}
 
         <section className="mt-8 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Choose your seat</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Available seats are shown in their section&apos;s color; grey
-              seats are already taken.
-            </p>
-          </div>
           {/* keyed by event so the selection resets when navigating between events */}
-          <SeatMap key={event.id} seatGroups={event.seatGroups} gapSeats={event.gapSeats} />
+          <BookingFlow
+            key={event.id}
+            slug={slug}
+            eventId={event.id}
+            seatGroups={event.seatGroups}
+            gapSeats={event.gapSeats}
+          />
         </section>
       </div>
     </main>

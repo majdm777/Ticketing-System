@@ -119,52 +119,64 @@ do not change it once A commits.
 
 ### Task A2: Booking request flow (ONLINE_CODE + PAY_AT_DOOR)
 
-- `src/lib/seat-locking.ts` — add `requestSeatPayAtDoor`:
-  - Same guarded `updateMany` shape as the existing `requestSeatOnlineCode`
-    (`WHERE status = 'AVAILABLE'`), but `caseType: PAY_AT_DOOR`, **no reference
-    code**, and `expiresAt = now + env.pendingDoorExpiryHours` (default 24h).
-  - Both request functions must run inside one `prisma.$transaction` and
-    reject requests for an event that is not bookable. The event must be
-    `status = PUBLISHED` and **not** `CLOSED` or `CANCELED`, and its
-    `startsAt` must still be in the future — checked within the same
-    transaction as the guarded seat `updateMany`. A public Server Action can
-    be invoked without the page ever rendering, so the mutation itself is the
-    enforcement point, never the UI. (Same condition as the
-    `{ outcome: 'live' }` contract from A1 / Task B2.)
+- `src/lib/seat-locking.ts` — add `requestSeats` (accepts `eventSeatIds[]`
+  and a `caseType`):
+  - Locks every requested seat with the same guarded `updateMany` shape as the
+    original single-seat request (`WHERE status = 'AVAILABLE'`), all inside
+    one `prisma.$transaction` — either every seat is held or none are (any
+    taken seat rolls the whole request back).
+  - `caseType: PAY_AT_DOOR` → **no reference code** and
+    `expiresAt = now + env.pendingDoorExpiryHours` (default 24h).
+  - `caseType: ONLINE_CODE` → **one reference code shared by the whole group**
+    (the attendee uses it once as the payment note). One `Booking` is created
+    per seat, each carrying the same code. The code is reserved under a UNIQUE
+    constraint inside the transaction (see the `ReferenceCode` table); a unique
+    violation aborts that transaction and the request retries with a fresh
+    code. `Booking.referenceCode` itself is no longer DB-unique (see migration
+    `share_reference_codes`).
+  - Rejects requests for an event that is not bookable. The event must be
+    `status = PUBLISHED` and its `startsAt` must still be in the future —
+    checked within the same transaction as the guarded seat `updateMany`. A
+    public Server Action can be invoked without the page ever rendering, so
+    the mutation itself is the enforcement point, never the UI. (Same
+    condition as the `{ outcome: 'live' }` contract from A1 / Task B2.)
 - `src/lib/validation/bookings.ts` — add a Zod schema for the public request:
-  `eventId`, `eventSeatId`, `userName`, `userPhone` (native phone shape),
-  `caseType` restricted to `ONLINE_CODE | PAY_AT_DOOR` only — `GUEST` is
-  admin-only and must never be accepted from the public.
+  `eventId`, `eventSeatIds` (1–8, deduplicated), `userName`, `userPhone`
+  (native phone shape), `caseType` restricted to
+  `ONLINE_CODE | PAY_AT_DOOR` only — `GUEST` is admin-only and must never be
+  accepted from the public.
 - `src/lib/actions/bookings.ts` (or a new `src/lib/actions/requests.ts`) — a
-  `requestSeatAction` Server Action: Zod-validate, call
-  `requestSeatOnlineCode` or `requestSeatPayAtDoor`, return
-  `{ ok: true, bookingId, referenceCode? }` or `{ ok: false, error }`. A
-  failed guarded update (0 rows — seat taken between load and submit) returns a
-  friendly typed error, not a throw.
+  `requestSeatAction` Server Action: Zod-validate, call `requestSeats`,
+  return `{ ok: true, bookings: [{ bookingId, eventSeatId }], referenceCode? }`
+  or `{ ok: false, error }`. A failed guarded update (0 rows — a seat taken
+  between load and submit) returns a friendly typed error, not a throw.
 - `/e/[slug]` page — the request flow:
-  1. Attendee taps an `AVAILABLE` seat.
+  1. Attendee taps one or more `AVAILABLE` seats (multi-select, cap 8); a
+     total price is shown with the selection.
   2. Attendee picks a booking case: **Pay online with code** (ONLINE_CODE) or
      **Pay at the door** (PAY_AT_DOOR).
   3. Attendee enters name + phone (`type="tel"`, `inputMode="tel"`,
      `autoComplete`, 16px+, errors visible without scrolling).
   4. On success show a confirmation screen:
-     - ONLINE_CODE — show the reference code large and unmissable, with
-       "pay the organizer and use this code as the payment note" instructions,
-       plus a "check my booking" link to
+     - ONLINE_CODE — show the one shared reference code large and unmissable,
+       with the total price, "pay the organizer and use this code as the
+       payment note" instructions, plus a "check my booking" link per seat to
        `/e/[slug]/booking/[bookingId]` (the route B owns).
-     - PAY_AT_DOOR — "we're holding your seat for you — pay at the door",
-       plus the same status-page link.
-  5. On failure (seat no longer available, event canceled/closed, event
+     - PAY_AT_DOOR — "we're holding your seats for you — pay at the door",
+       plus the same status-page links.
+  5. On failure (a seat no longer available, event canceled/closed, event
      already started, validation error) show the error inline and re-render
      the seat map so the attendee can pick another seat.
 
 **Acceptance criteria**
-- [ ] ONLINE_CODE request: seat `AVAILABLE → PENDING`, booking created
-      `PENDING` with a reference code shown to the attendee
-- [ ] PAY_AT_DOOR request: seat `AVAILABLE → PENDING`, booking created
-      `PENDING`, no reference code, expiry from `PENDING_DOOR_EXPIRY_HOURS`
+- [ ] ONLINE_CODE request: seats `AVAILABLE → PENDING`, one `PENDING` booking
+      created per seat, all sharing one reference code shown to the attendee
+- [ ] PAY_AT_DOOR request: seats `AVAILABLE → PENDING`, one `PENDING` booking
+      per seat, no reference code, expiry from `PENDING_DOOR_EXPIRY_HOURS`
 - [ ] Two simultaneous requests for the same seat — exactly one succeeds, the
       other gets a typed "seat no longer available" error (guarded update)
+- [ ] A multi-seat request is atomic — if one seat is taken, none of the
+      seats in the request are held (transaction rolls back)
 - [ ] Public request with `caseType: GUEST` is rejected
 - [ ] Requesting on a `CANCELED` event is rejected
 - [ ] Requesting on a `CLOSED` event is rejected
