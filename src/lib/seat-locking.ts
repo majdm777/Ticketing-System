@@ -226,10 +226,17 @@ export async function createGuestBooking(params: {
     return await prisma.$transaction(async (tx) => {
       const event = await tx.event.findUnique({
         where: { id: eventId },
-        select: { status: true },
+        select: { status: true, startsAt: true },
       });
-      if (!event || event.status === EventStatus.CANCELED) {
-        return { ok: false, error: 'Guest booking is unavailable for canceled events.' };
+      if (
+        !event ||
+        event.status !== EventStatus.PUBLISHED ||
+        event.startsAt <= new Date()
+      ) {
+        return {
+          ok: false,
+          error: 'Guest booking is only available for published events that have not started yet.',
+        };
       }
 
       const seatResult = await tx.eventSeat.updateMany({
@@ -237,7 +244,10 @@ export async function createGuestBooking(params: {
           eventId,
           venueSeatId: { in: venueSeatIds },
           status: SeatStatus.AVAILABLE,
-          event: { status: { not: EventStatus.CANCELED } },
+          event: {
+            status: EventStatus.PUBLISHED,
+            startsAt: { gt: new Date() },
+          },
         },
         data: {
           status: SeatStatus.BOOKED,

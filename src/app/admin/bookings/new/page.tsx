@@ -20,6 +20,11 @@ export default async function NewGuestBookingPage({
       })
     : null;
 
+  const canGuestBook =
+    event !== null &&
+    event.status === EventStatus.PUBLISHED &&
+    event.startsAt > new Date();
+
   if (event) {
     await expirePastDuePendingBookings(event.id);
   }
@@ -71,11 +76,7 @@ export default async function NewGuestBookingPage({
       </div>
 
       {event ? (
-        event.status === EventStatus.CANCELED ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
-            &quot;{event.name}&quot; was canceled, so guest booking is unavailable.
-          </p>
-        ) : (
+        canGuestBook ? (
           <>
             <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-5">
               <h2 className="font-semibold tracking-tight">{event.name}</h2>
@@ -83,6 +84,11 @@ export default async function NewGuestBookingPage({
             </section>
             <GuestBookingForm eventId={event.id} seats={flatSeats} sections={sections} />
           </>
+        ) : (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
+            Guest booking is unavailable for &quot;{event.name}&quot; — only published events
+            that have not started yet can be guest-booked.
+          </p>
         )
       ) : (
         <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">

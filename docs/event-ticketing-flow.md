@@ -35,9 +35,17 @@ dashboard to confirm bookings and manage events.
   - View pending bookings that need action
   - Confirm a "pay online with code" booking after matching the payment
   - Confirm a "pay at door" booking after verifying intent externally
-  - Create an already-confirmed guest booking directly
+  - Create a guest booking for a published, not-yet-started event
   - Cancel a published, not-yet-started event
   - Resend a ticket if delivery failed
+- Dashboard scope and revenue: the admin dashboard (`/admin`) shows **only
+  PUBLISHED events** and their summary stats (revenue, confirmed count, pending
+  holds, occupancy) — DRAFT/CLOSED/CANCELED events are managed via
+  `/admin/events` and never appear there. **Revenue counts only CONFIRMED
+  ONLINE_CODE bookings** (the sum of their section prices): GUEST and
+  PAY_AT_DOOR bookings are excluded, because the dashboard reports what was
+  actually paid through the external payment note, not doorstep or admin-made
+  bookings.
 - Structural rules:
   - Single shared-password auth is intentional for this scope — there is
     no multi-admin permission system. If more admins are needed later,
@@ -134,14 +142,21 @@ Venue
   2. Attendee pays externally, using the code as a payment note.
   3. Admin matches the code to a payment and confirms → seat transitions
      `PENDING → BOOKED`, booking transitions `PENDING → CONFIRMED`.
-  4. If unconfirmed for `PENDING_ONLINE_EXPIRY_HOURS` (default 3h), a
-     scheduled sweep transitions the booking to `EXPIRED` and the seat back
-     to `AVAILABLE`, freeing it for a new request.
-- Lifecycle, case 2 — pay at the door (planned, not yet built):
+  4. If unconfirmed for `PENDING_ONLINE_EXPIRY_HOURS` (default 3h), the hold
+      expires: the booking goes `PENDING → EXPIRED` and the seat back to
+      `AVAILABLE`, freeing it for a new request. Expiry is a **lazy sweep**
+      (`expirePastDuePendingBookings`), not a background job — it runs from
+      the pages that read seat or booking state (public event page, admin
+      bookings page, admin dashboard) and expires every past-due PENDING hold
+      in one guarded transaction (cheap count-first fast path when nothing is
+      past due).
+- Lifecycle, case 2 — pay at the door:
   - Same shape as case 1, but no reference code is generated (nothing to
     match against an external payment) and the expiry window is longer
     (`PENDING_DOOR_EXPIRY_HOURS`, default 24h), since no payment is due
-    upfront.
+    upfront. The admin confirms the booking after verifying intent
+    externally (seat `PENDING → BOOKED`, booking `PENDING → CONFIRMED`);
+    same lazy expiry sweep applies.
 - Lifecycle, case 3 — admin-invited guest:
   - Created directly by the admin: the seat atomically transitions
     `AVAILABLE → BOOKED` and a `Booking` is created directly `CONFIRMED`,

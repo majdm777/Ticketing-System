@@ -260,6 +260,8 @@ do not change it once A commits.
 ### Out of scope (do NOT build here)
 
 - WhatsApp ticket sending / resend (external integration)
-- The scheduled expiry sweep job (separate task)
+- A scheduled cron-style expiry sweep job (the lazy on-demand sweep —
+  `expirePastDuePendingBookings` — runs from the pages that read seat/booking
+  state; a background job is still separate)
 - The admin panel (already done)
 - Any authentication or accounts for attendees

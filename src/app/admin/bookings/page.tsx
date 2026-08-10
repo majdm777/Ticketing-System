@@ -1,8 +1,14 @@
 import { BookingStatus } from '@prisma/client';
 import Link from 'next/link';
 
+import {
+  SeatMap as VenueSeatMap,
+  type SeatMapLegendItem,
+  type SeatMapRow,
+} from '@/components/seat-map';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
+import { buildSeatMapData } from '@/lib/seat-map-data';
 import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 import { PendingBookingActions } from './pending-booking-actions';
@@ -54,6 +60,83 @@ export default async function AdminBookingsPage({
         },
       })
     : [];
+
+  const showScroll = bookings.length >= 10;
+
+  // Whole-event occupancy for the read-only seat map. EventSeat.status is the
+  // source of truth (kept in sync by booking confirm/pending/expiry flows),
+  // so booked and pending seats are highlighted independently of the status
+  // filter above.
+  const eventSeats = event
+    ? await prisma.eventSeat.findMany({
+        where: { eventId: event.id },
+        select: {
+          id: true,
+          status: true,
+          venueSeat: {
+            select: {
+              id: true,
+              row: true,
+              number: true,
+              section: { select: { name: true, price: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  const seatInputs = eventSeats.map((eventSeat) => ({
+    id: eventSeat.id,
+    venueSeatId: eventSeat.venueSeat.id,
+    row: eventSeat.venueSeat.row,
+    number: eventSeat.venueSeat.number,
+    section: eventSeat.venueSeat.section?.name ?? '',
+    status: eventSeat.status,
+  }));
+  const { rows: dataRows, sectionColors } = buildSeatMapData(seatInputs);
+
+  const statusColor: Record<string, string> = {
+    BOOKED: '#18181b',
+    PENDING: '#f97316',
+    CANCELED: '#e4e4e7',
+  };
+
+  const mapRows: SeatMapRow[] = dataRows.map((dataRow) => ({
+    label: dataRow.row,
+    seats: dataRow.seats.map((seat) => ({
+      id: seat.id,
+      number: seat.number,
+      gap: seat.gap,
+      color:
+        seat.status === 'AVAILABLE'
+          ? seat.color
+          : (statusColor[seat.status] ?? '#e4e4e7'),
+      ariaLabel: `${seat.section} section, row ${dataRow.row}, seat ${
+        seat.number
+      }, ${seat.status.toLowerCase()}`,
+    })),
+  }));
+
+  const sectionsByName = new Map<string, { name: string; price: number }>();
+  for (const eventSeat of eventSeats) {
+    const section = eventSeat.venueSeat.section;
+    if (section && !sectionsByName.has(section.name)) {
+      sectionsByName.set(section.name, {
+        name: section.name,
+        price: section.price,
+      });
+    }
+  }
+
+  const legend: SeatMapLegendItem[] = [
+    ...Array.from(sectionsByName.values()).map((section) => ({
+      name: section.name,
+      color: sectionColors.get(section.name) ?? '#e5e7eb',
+      price: section.price,
+    })),
+    { name: 'Booked', color: '#18181b' },
+    { name: 'Pending', color: '#f97316' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -122,7 +205,11 @@ export default async function AdminBookingsPage({
             </div>
           </section>
 
-          <div className="space-y-3 md:hidden">
+          <div
+            className={`space-y-3 md:hidden ${
+              showScroll ? 'max-h-[560px] overflow-y-auto pb-3' : ''
+            }`}
+          >
             {bookings.map((booking) => (
               <article key={booking.id} className="rounded-lg border border-zinc-200 bg-white p-4">
                 <div className="space-y-3">
@@ -179,7 +266,11 @@ export default async function AdminBookingsPage({
             ) : null}
           </div>
 
-          <div className="hidden overflow-hidden rounded-lg border border-zinc-200 bg-white md:block">
+          <div
+            className={`hidden rounded-lg border border-zinc-200 bg-white md:block ${
+              showScroll ? 'max-h-[560px] overflow-y-auto' : 'overflow-hidden'
+            }`}
+          >
             <table className="w-full min-w-225 text-left text-sm">
               <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500">
                 <tr>
@@ -229,6 +320,18 @@ export default async function AdminBookingsPage({
               </p>
             ) : null}
           </div>
+
+          <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-5">
+            <div className="mb-4 space-y-1">
+              <h2 className="text-sm font-semibold uppercase text-zinc-500">
+                Seat map
+              </h2>
+              <p className="text-sm leading-6 text-zinc-600">
+                Booked seats are dark, pending holds are orange.
+              </p>
+            </div>
+            <VenueSeatMap readOnly rows={mapRows} legend={legend} />
+          </section>
         </>
       ) : (
         <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">

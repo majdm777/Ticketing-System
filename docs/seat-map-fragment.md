@@ -1,8 +1,7 @@
 # Shared Seat Map Fragment
 
-The venue seat map is drawn by **one** component, used by both the admin
-venue builder and the public event page. Do not duplicate its rendering in
-either panel.
+The venue seat map is drawn by **one** component, used across the admin
+panel and the public pages. Do not duplicate its rendering in any caller.
 
 - Component: `src/components/seat-map.tsx` → exports `SeatMap`
 - Data builder: `src/lib/seat-map-data.ts` → exports `buildSeatMapData`
@@ -14,17 +13,26 @@ either panel.
     component and feeds it the event's live seat data)
   - Admin guest booking — `src/app/admin/bookings/new/guest-booking-form.tsx`
     (uses the shared component and the data builder)
+  - Admin bookings review — `src/app/admin/bookings/page.tsx` (uses the shared
+    component in **read-only** mode: a display-only whole-event map with
+    status-colored seats — BOOKED `#18181b`, PENDING `#f97316`, CANCELED and
+    freed seats `#e4e4e7`)
 
 ## Why it is shared
 
 Any future **visual** change to the map (curvature, stairs, stage, spacing,
 colors, ...) must be made **inside `src/components/seat-map.tsx`** so it shows
 up everywhere. Editing the rendering in a page file instead silently forks the
-two panels.
+callers.
 
 **Data changes** (adding/removing rows, seat counts, section assignments,
-prices) need no component work — both callers read the same venue/seat records
-from the database, so saving the venue immediately reflects on the event page.
+prices) need no component work — the component draws whatever seat data it is
+given. Layout changes do **not** propagate to already-created events: an event
+clones its `EventSeat` rows once at creation, and venue-layout edits are
+blocked once any event uses the venue (see `src/lib/venues.ts`). Only metadata
+read live through the shared `VenueSeat` relation (section name/price) stays in
+sync for existing events; adding/removing rows, seat counts, or section
+assignments never appear in an event that already exists.
 
 ## Contract
 
@@ -38,7 +46,7 @@ export type SeatMapSeat = {
   disabled?: boolean;     // e.g. seat already taken
   number?: string;        // seat number, drawn inside the seat
   gap?: boolean;          // blocked-out position (no section, not bookable)
-  onClick: () => void;
+  onClick?: () => void;   // optional: maps rendered with `readOnly` have none
   ariaLabel: string;
 };
 
@@ -56,6 +64,11 @@ export type SeatMapLegendItem = {
 
 `SeatMap` renders the rows stacked vertically and centered, then an optional
 legend (colored dot + section name + price) below, separated by a border.
+
+`readOnly` (default `false`) renders every non-gap seat as a plain `<span>`
+instead of a `<button>` — no button semantics, no tab stop, no cursor, no
+click handling. It is used for display-only maps (e.g. the admin bookings
+review) where `SeatMapSeat.onClick` is absent.
 
 ### Built-in rendering (do not fork in pages)
 
@@ -124,9 +137,14 @@ Callers build a `SeatMapRow[]` from their own source:
 - The event page and guest-booking form use `buildSeatMapData` (which merges
   all sections' rows into one row-ordered grid, because a single venue row can
   hold seats from more than one section).
-- A seat should be `disabled` (grey `#e5e7eb`) when it is not selectable (e.g.
-  taken); the event page also marks the currently selected seat with the black
-  ring.
+- In an interactive map (`readOnly` false), a seat should be `disabled` when
+  it is not selectable (e.g. taken): the button is inert, its border is
+  `border-zinc-300`, and its seat number is `#71717a`. The event page also
+  marks the currently selected seat with the black ring.
+- A `readOnly` map (admin bookings review) has no disabled state: every
+  non-gap seat renders as a labeled `<span role="img">` in its status color,
+  and the seat number uses `seatTextColor(seat.color)` (auto-picked dark or
+  light for contrast) — never the interactive disabled number color.
 
 ## Verification
 
