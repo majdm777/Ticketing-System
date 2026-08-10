@@ -44,7 +44,7 @@ function StatusCard({
         )}
 
         <p className="mt-4 text-base leading-6 text-zinc-700">
-          Once your payment is confirmed, this page will update automatically.
+          Once your payment is confirmed, refresh this page to see the update.
         </p>
       </section>
     );
