@@ -92,8 +92,9 @@ export async function requestSeats(params: {
     : env.pendingDoorExpiryHours;
   const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
-  // The request can run up to ~22 sequential queries (bookability check, hold
-  // count, code reservation, then 2 queries per seat), which can exceed
+  // The request runs a fixed set of queries per attempt (bookability check,
+  // hold count, code reservation, one batched seat lock, one batched booking
+  // insert), independent of the number of seats. Even so, it can still exceed
   // Prisma's 5s interactive-transaction timeout under contention or latency.
   // Raise both the wait and the run budget explicitly.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -103,15 +104,23 @@ export async function requestSeats(params: {
           await assertEventBookable(tx, eventId);
 
           // The count and the inserts below share one transaction, so two
-          // requests for the same phone cannot both slip past the cap.
+          // requests for the same phone cannot both slip past the cap. Only
+          // currently active holds count: PENDING rows past expiresAt are not
+          // swept until the lazy expiry job runs, but they no longer hold a
+          // seat, so they must not consume the cap.
+          const now = new Date();
           const pendingHolds = await tx.booking.count({
-            where: { eventId, userPhone, status: BookingStatus.PENDING },
+            where: {
+              eventId,
+              userPhone,
+              status: BookingStatus.PENDING,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            },
           });
           if (pendingHolds + eventSeatIds.length > MAX_PENDING_HOLDS_PER_PHONE_EVENT) {
             throw new SeatHoldLimitError();
           }
 
-          const now = new Date();
           // Reserve the group's code under a UNIQUE constraint before any
           // booking references it (ReferenceCode.code). Two concurrent
           // requests can never both win the same code: the loser's insert
@@ -123,60 +132,68 @@ export async function requestSeats(params: {
               })).code
             : null;
 
-          const bookings = [];
-          for (const eventSeatId of eventSeatIds) {
-            const lockResult = await tx.eventSeat.updateMany({
-              where: {
-                id: eventSeatId,
-                eventId,
-                status: SeatStatus.AVAILABLE,
-                event: {
-                  status: EventStatus.PUBLISHED,
-                  startsAt: { gt: now },
-                },
+          // Lock every seat with one guarded update. The where clause keeps the
+          // event-bookability and per-seat predicates; count must match the
+          // input exactly, otherwise the transaction rolls back the partial
+          // locks. The failure-path lookup then distinguishes a seat that does
+          // not exist / belongs to another event (a client bug or a probing
+          // request) from one that genuinely failed the availability
+          // conditions. The lookup runs only on this failure path.
+          const lockResult = await tx.eventSeat.updateMany({
+            where: {
+              id: { in: eventSeatIds },
+              eventId,
+              status: SeatStatus.AVAILABLE,
+              event: {
+                status: EventStatus.PUBLISHED,
+                startsAt: { gt: now },
               },
-              data: {
-                status: SeatStatus.PENDING,
-                bookedByName: userName,
-                bookedByPhone: userPhone,
-                referenceCode,
-                pendingSince: now,
-                expiresAt,
-              },
-            });
+            },
+            data: {
+              status: SeatStatus.PENDING,
+              bookedByName: userName,
+              bookedByPhone: userPhone,
+              referenceCode,
+              pendingSince: now,
+              expiresAt,
+            },
+          });
 
-            if (lockResult.count === 0) {
-              // The guarded update came up empty. Distinguish a seat that does
-              // not exist / belongs to another event (a client bug or a probing
-              // request) from a seat that genuinely failed the availability
-              // conditions, so the caller's error is accurate. The lookup runs
-              // only on this failure path.
-              const inEvent = await tx.eventSeat.findFirst({
-                where: { id: eventSeatId, eventId },
-                select: { id: true },
-              });
-              if (!inEvent) {
-                throw new InvalidSeatError();
-              }
-              throw new SeatUnavailableError();
+          if (lockResult.count !== eventSeatIds.length) {
+            const inEvent = await tx.eventSeat.findMany({
+              where: { id: { in: eventSeatIds }, eventId },
+              select: { id: true },
+            });
+            if (inEvent.length !== eventSeatIds.length) {
+              throw new InvalidSeatError();
             }
-
-            const booking = await tx.booking.create({
-              data: {
-                eventId,
-                eventSeatId,
-                userName,
-                userPhone,
-                caseType,
-                status: BookingStatus.PENDING,
-                referenceCode,
-                expiresAt,
-              },
-              select: { id: true, eventSeatId: true },
-            });
-
-            bookings.push(booking);
+            throw new SeatUnavailableError();
           }
+
+          // Create all bookings in one statement. PostgreSQL's
+          // createManyAndReturn supports RETURNING, but the returned row order
+          // is not guaranteed to match the input order, so the results are
+          // keyed by eventSeatId rather than zipped by position.
+          const createdBookings = await tx.booking.createManyAndReturn({
+            data: eventSeatIds.map((eventSeatId) => ({
+              eventId,
+              eventSeatId,
+              userName,
+              userPhone,
+              caseType,
+              status: BookingStatus.PENDING,
+              referenceCode,
+              expiresAt,
+            })),
+            select: { id: true, eventSeatId: true },
+          });
+
+          const bookingBySeat = new Map(
+            createdBookings.map((booking) => [booking.eventSeatId, booking]),
+          );
+          const bookings = eventSeatIds.map(
+            (eventSeatId) => bookingBySeat.get(eventSeatId)!,
+          );
 
           return { referenceCode, bookings };
         },

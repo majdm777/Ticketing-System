@@ -176,6 +176,12 @@ model Booking {
 // unique violation and the whole request transaction retries with a fresh
 // code. Rows persist after a booking is confirmed or expires, so a code is
 // never reused.
+//
+// Growth policy: codes are 8 characters from a 31-character alphabet (~850B
+// keyspace) so this table can grow indefinitely without pruning. Rows are never
+// deleted: a code still referenced by a confirmed booking must stay reserved
+// for payment matching, so pruning is unsafe — code length is the lever
+// instead (see generateReferenceCode in src/lib/tickets.ts).
 model ReferenceCode {
   code      String   @id
   createdAt DateTime @default(now())

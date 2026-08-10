@@ -24,6 +24,16 @@ CREATE TABLE "ReferenceCode" (
     CONSTRAINT "ReferenceCode_pkey" PRIMARY KEY ("code")
 );
 
+-- Backfill: every code already issued must be reserved, otherwise a new group
+-- can win a code that an existing PENDING/CONFIRMED booking still uses. Codes
+-- shared by several bookings are inserted once (DISTINCT); ON CONFLICT keeps
+-- the backfill idempotent.
+INSERT INTO "ReferenceCode" ("code")
+SELECT DISTINCT "referenceCode"
+FROM "Booking"
+WHERE "referenceCode" IS NOT NULL
+ON CONFLICT ("code") DO NOTHING;
+
 -- DropUnique
 DROP INDEX "Booking_referenceCode_key";
 

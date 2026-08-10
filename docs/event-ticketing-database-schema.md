@@ -221,5 +221,10 @@ code String @id // UNIQUE — reserved inside the request transaction before any
                 // win the same code (the loser aborts and retries with a fresh
                 // one). Rows persist, so a code is never reused.
 
+                // Growth policy: codes are 8 chars from a 31-char alphabet
+                // (~850B keyspace); the table grows without pruning because
+                // rows are never deleted (see src/lib/tickets.ts and the model
+                // comment in prisma/schema.prisma).
+
 createdAt DateTime @default(now())
 }

@@ -101,6 +101,9 @@ export function BookingFlow({
   const atCap = selectedSeatIds.size >= MAX_PUBLIC_BOOKING_SEATS;
 
   function toggleSeat(seatId: string) {
+    if (pending) {
+      return;
+    }
     setSelectedSeatIds((prev) => {
       const next = new Set(prev);
       if (next.has(seatId)) {
@@ -114,8 +117,18 @@ export function BookingFlow({
 
   if (state.ok) {
     const isOnline = state.referenceCode != null;
-    const bookingBySeat = new Map(
-      state.bookings.map((booking) => [booking.eventSeatId, booking.bookingId]),
+    const bookedSeats = state.bookings
+      .map((booking) => ({
+        seat: seatById.get(booking.eventSeatId),
+        bookingId: booking.bookingId,
+      }))
+      .filter(
+        (entry): entry is { seat: SelectedSeat; bookingId: string } =>
+          entry.seat != null,
+      );
+    const bookedTotal = bookedSeats.reduce(
+      (sum, { seat }) => sum + seat.price,
+      0,
     );
 
     return (
@@ -128,7 +141,7 @@ export function BookingFlow({
           {isOnline ? (
             <div className="mt-4 rounded-lg border border-zinc-950 bg-zinc-950 p-4 text-center">
               <p className="text-sm text-zinc-200">
-                Pay the organizer {formatUsd(totalPrice)} and use this code as
+                Pay the organizer {formatUsd(bookedTotal)} and use this code as
                 your payment note:
               </p>
               <p className="mt-2 font-mono text-3xl font-bold tracking-widest text-white">
@@ -139,7 +152,7 @@ export function BookingFlow({
             <p className="mt-4 text-sm leading-6 text-zinc-700">
               We are holding your seats for you. Pay{' '}
               <span className="font-bold text-zinc-950">
-                {formatUsd(totalPrice)}
+                {formatUsd(bookedTotal)}
               </span>{' '}
               at the door when you arrive.
             </p>
@@ -149,7 +162,7 @@ export function BookingFlow({
             Your seats
           </h3>
           <ul className="mt-2 space-y-2">
-            {selectedSeats.map((seat) => (
+            {bookedSeats.map(({ seat, bookingId }) => (
               <li
                 key={seat.id}
                 className="flex items-center gap-3 rounded-lg border border-emerald-600 bg-emerald-50 px-3 py-2"
@@ -162,7 +175,7 @@ export function BookingFlow({
                   {formatUsd(seat.price)}
                 </span>
                 <Link
-                  href={`/e/${slug}/booking/${bookingBySeat.get(seat.id)}`}
+                  href={`/e/${slug}/booking/${bookingId}`}
                   className="ml-auto inline-flex min-h-11 shrink-0 items-center px-2 text-sm font-semibold text-emerald-900 underline"
                 >
                   Check booking

@@ -177,18 +177,21 @@ Venue
   or its `startsAt` has already passed. This is enforced inside the same
   transaction as the seat lock (the public Server Action can be invoked
   without the page rendering, so the mutation — not the UI — is the guard).
-- Reference codes: generated from a 31-character alphabet that excludes
-  visually-ambiguous characters (no `0`/`O`, `1`/`I`/`L`), since attendees
-  may read or copy them by hand. One code is generated per request group
-  (single seat or many) and shared by all of that group's bookings. Uniqueness
-  between groups is enforced by the `ReferenceCode` table: the code is reserved
-  as a row with a UNIQUE constraint inside the same transaction that creates
-  the bookings, so two concurrent requests can never both win the same code —
-  the loser's insert raises a unique violation, that whole request transaction
-  rolls back (reservation included), and the request retries up to 5 times with
-  a fresh code. `Booking.referenceCode` itself stays non-unique because one
-  code legitimately appears on several bookings; reservation rows persist after
-  a booking is confirmed or expires, so a code is never reused.
+- Reference codes: generated as 8 characters from a 31-character alphabet that
+  excludes visually-ambiguous characters (no `0`/`O`, `1`/`I`/`L`), since
+  attendees may read or copy them by hand. One code is generated per request
+  group (single seat or many) and shared by all of that group's bookings.
+  Uniqueness between groups is enforced by the `ReferenceCode` table: the code
+  is reserved as a row with a UNIQUE constraint inside the same transaction
+  that creates the bookings, so two concurrent requests can never both win the
+  same code — the loser's insert raises a unique violation, that whole request
+  transaction rolls back (reservation included), and the request retries up to
+  5 times with a fresh code. `Booking.referenceCode` itself stays non-unique
+  because one code legitimately appears on several bookings; reservation rows
+  persist after a booking is confirmed or expires, so a code is never reused.
+  The 8-character length (~850B keyspace) keeps the reservation table growing
+  without needing pruning — rows are never deleted because a code still
+  referenced by a confirmed booking must stay reserved for payment matching.
 - Event cancellation: only a `PUBLISHED` event whose `startsAt` is still in
   the future can be canceled. In one transaction the event goes
   `PUBLISHED → CANCELED`, every `EventSeat` goes `→ CANCELED` with its hold
