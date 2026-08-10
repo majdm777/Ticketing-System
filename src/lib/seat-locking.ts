@@ -18,6 +18,26 @@ export class EventNotBookableError extends Error {
   }
 }
 
+export class SeatHoldLimitError extends Error {
+  constructor(message = 'This phone number already has many seats on hold. Let those holds expire before requesting more.') {
+    super(message);
+    this.name = 'SeatHoldLimitError';
+  }
+}
+
+export class InvalidSeatError extends Error {
+  constructor(message = 'This seat is not part of this event.') {
+    super(message);
+    this.name = 'InvalidSeatError';
+  }
+}
+
+// Abuse protection for the unauthenticated public request: cap how many seats
+// a single phone number can hold as PENDING on one event. Without a cap, a
+// caller could request up to 8 seats per call and repeat until the event is
+// fully held, then let the holds expire hours later.
+export const MAX_PENDING_HOLDS_PER_PHONE_EVENT = 16;
+
 type ActionResult<T = undefined> =
   | (T extends undefined ? { ok: true } : { ok: true } & T)
   | { ok: false; error: string };
@@ -46,22 +66,6 @@ async function assertEventBookable(tx: Prisma.TransactionClient, eventId: string
   }
 }
 
-async function uniqueReferenceCode(tx: Prisma.TransactionClient) {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const candidate = generateReferenceCode();
-    const clash = await tx.booking.findFirst({
-      where: { referenceCode: candidate },
-      select: { id: true },
-    });
-
-    if (!clash) {
-      return candidate;
-    }
-  }
-
-  throw new Error('Could not generate a unique reference code, please retry');
-}
-
 // Attendee request for one or more seats. All seats are locked and booked
 // inside a single transaction, so either every selected seat is held or none
 // are — a partial request (one seat already taken) rolls back entirely. Each
@@ -88,60 +92,107 @@ export async function requestSeats(params: {
     : env.pendingDoorExpiryHours;
   const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
-  return prisma.$transaction(async (tx) => {
-    await assertEventBookable(tx, eventId);
+  // The request can run up to ~22 sequential queries (bookability check, hold
+  // count, code reservation, then 2 queries per seat), which can exceed
+  // Prisma's 5s interactive-transaction timeout under contention or latency.
+  // Raise both the wait and the run budget explicitly.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          await assertEventBookable(tx, eventId);
 
-    const now = new Date();
-    // One code for the whole group. uniqueReferenceCode checks for clashes
-    // before inserting, so two different groups never share a code even
-    // though the column itself is no longer unique.
-    const referenceCode = online ? await uniqueReferenceCode(tx) : null;
+          // The count and the inserts below share one transaction, so two
+          // requests for the same phone cannot both slip past the cap.
+          const pendingHolds = await tx.booking.count({
+            where: { eventId, userPhone, status: BookingStatus.PENDING },
+          });
+          if (pendingHolds + eventSeatIds.length > MAX_PENDING_HOLDS_PER_PHONE_EVENT) {
+            throw new SeatHoldLimitError();
+          }
 
-    const bookings = [];
-    for (const eventSeatId of eventSeatIds) {
-      const lockResult = await tx.eventSeat.updateMany({
-        where: {
-          id: eventSeatId,
-          eventId,
-          status: SeatStatus.AVAILABLE,
-          event: {
-            status: EventStatus.PUBLISHED,
-            startsAt: { gt: now },
-          },
+          const now = new Date();
+          // Reserve the group's code under a UNIQUE constraint before any
+          // booking references it (ReferenceCode.code). Two concurrent
+          // requests can never both win the same code: the loser's insert
+          // raises P2002, aborts this transaction (reservation included), and
+          // the outer loop retries with a fresh code.
+          const referenceCode = online
+            ? (await tx.referenceCode.create({
+                data: { code: generateReferenceCode() },
+              })).code
+            : null;
+
+          const bookings = [];
+          for (const eventSeatId of eventSeatIds) {
+            const lockResult = await tx.eventSeat.updateMany({
+              where: {
+                id: eventSeatId,
+                eventId,
+                status: SeatStatus.AVAILABLE,
+                event: {
+                  status: EventStatus.PUBLISHED,
+                  startsAt: { gt: now },
+                },
+              },
+              data: {
+                status: SeatStatus.PENDING,
+                bookedByName: userName,
+                bookedByPhone: userPhone,
+                referenceCode,
+                pendingSince: now,
+                expiresAt,
+              },
+            });
+
+            if (lockResult.count === 0) {
+              // The guarded update came up empty. Distinguish a seat that does
+              // not exist / belongs to another event (a client bug or a probing
+              // request) from a seat that genuinely failed the availability
+              // conditions, so the caller's error is accurate. The lookup runs
+              // only on this failure path.
+              const inEvent = await tx.eventSeat.findFirst({
+                where: { id: eventSeatId, eventId },
+                select: { id: true },
+              });
+              if (!inEvent) {
+                throw new InvalidSeatError();
+              }
+              throw new SeatUnavailableError();
+            }
+
+            const booking = await tx.booking.create({
+              data: {
+                eventId,
+                eventSeatId,
+                userName,
+                userPhone,
+                caseType,
+                status: BookingStatus.PENDING,
+                referenceCode,
+                expiresAt,
+              },
+              select: { id: true, eventSeatId: true },
+            });
+
+            bookings.push(booking);
+          }
+
+          return { referenceCode, bookings };
         },
-        data: {
-          status: SeatStatus.PENDING,
-          bookedByName: userName,
-          bookedByPhone: userPhone,
-          referenceCode,
-          pendingSince: now,
-          expiresAt,
-        },
-      });
-
-      if (lockResult.count === 0) {
-        throw new SeatUnavailableError();
+        { maxWait: 5000, timeout: 15000 },
+      );
+    } catch (error) {
+      const collided =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002';
+      if (!collided) {
+        throw error;
       }
-
-      const booking = await tx.booking.create({
-        data: {
-          eventId,
-          eventSeatId,
-          userName,
-          userPhone,
-          caseType,
-          status: BookingStatus.PENDING,
-          referenceCode,
-          expiresAt,
-        },
-        select: { id: true, eventSeatId: true },
-      });
-
-      bookings.push(booking);
     }
+  }
 
-    return { referenceCode, bookings };
-  });
+  throw new Error('Could not reserve a unique reference code, please retry');
 }
 
 export async function confirmOnlineCodeBooking(params: {

@@ -44,10 +44,13 @@ first — they are the source of truth for the domain and schema.
    breakpoint. Minimum 44×44px touch targets, no hover-dependent
    functionality, 16px+ inputs (prevents iOS zoom), and native input
    types/`autocomplete`. Full rules in AGENTS.md.
-10. **Reference codes** (for ONLINE_CODE): generate from a 31-char alphabet
-    that excludes visually ambiguous chars (no `0`/`O`, `1`/`I`/`L`). Check
-    uniqueness against ALL bookings ever (not just active), with a bounded retry
-    on collision.
+ 10. **Reference codes** (for ONLINE_CODE): generate from a 31-char alphabet
+     that excludes visually ambiguous chars (no `0`/`O`, `1`/`I`/`L`). Reserve
+     the code as a row in the `ReferenceCode` table (UNIQUE on `code`) inside
+     the same transaction that creates the bookings; a unique violation aborts
+     that transaction and the request retries up to 5 times with a fresh code.
+     `Booking.referenceCode` is not unique because one code is shared by all
+     bookings in a group.
 11. **Verification**: after your feature, run `npx tsc --noEmit` and
     `npm run lint` and confirm they pass.
 

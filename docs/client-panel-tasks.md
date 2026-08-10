@@ -129,9 +129,11 @@ do not change it once A commits.
     `expiresAt = now + env.pendingDoorExpiryHours` (default 24h).
   - `caseType: ONLINE_CODE` → **one reference code shared by the whole group**
     (the attendee uses it once as the payment note). One `Booking` is created
-    per seat, each carrying the same code. The code is generated once and
-    checked for clashes inside the transaction; `Booking.referenceCode` is no
-    longer DB-unique (see migration `share_reference_codes`).
+    per seat, each carrying the same code. The code is reserved under a UNIQUE
+    constraint inside the transaction (see the `ReferenceCode` table); a unique
+    violation aborts that transaction and the request retries with a fresh
+    code. `Booking.referenceCode` itself is no longer DB-unique (see migration
+    `share_reference_codes`).
   - Rejects requests for an event that is not bookable. The event must be
     `status = PUBLISHED` and its `startsAt` must still be in the future —
     checked within the same transaction as the guarded seat `updateMany`. A

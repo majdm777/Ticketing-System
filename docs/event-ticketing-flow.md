@@ -181,9 +181,14 @@ Venue
   visually-ambiguous characters (no `0`/`O`, `1`/`I`/`L`), since attendees
   may read or copy them by hand. One code is generated per request group
   (single seat or many) and shared by all of that group's bookings. Uniqueness
-  between groups is checked against all bookings ever made (not just active
-  ones), with a bounded retry on collision; the column itself is no longer
-  DB-unique because one code legitimately appears on several bookings.
+  between groups is enforced by the `ReferenceCode` table: the code is reserved
+  as a row with a UNIQUE constraint inside the same transaction that creates
+  the bookings, so two concurrent requests can never both win the same code —
+  the loser's insert raises a unique violation, that whole request transaction
+  rolls back (reservation included), and the request retries up to 5 times with
+  a fresh code. `Booking.referenceCode` itself stays non-unique because one
+  code legitimately appears on several bookings; reservation rows persist after
+  a booking is confirmed or expires, so a code is never reused.
 - Event cancellation: only a `PUBLISHED` event whose `startsAt` is still in
   the future can be canceled. In one transaction the event goes
   `PUBLISHED → CANCELED`, every `EventSeat` goes `→ CANCELED` with its hold

@@ -214,3 +214,12 @@ eventSeat EventSeat @relation(fields: [eventId, eventSeatId], references: [event
 @@index([status, expiresAt]) // lazy expiry sweep: "find all PENDING bookings past expiresAt"
 @@index([referenceCode]) // admin: match a payment note code to its group of bookings
 }
+
+model ReferenceCode {
+code String @id // UNIQUE — reserved inside the request transaction before any
+                // booking references it, so two concurrent requests can never
+                // win the same code (the loser aborts and retries with a fresh
+                // one). Rows persist, so a code is never reused.
+
+createdAt DateTime @default(now())
+}

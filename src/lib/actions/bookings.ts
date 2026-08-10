@@ -3,12 +3,15 @@
 import { revalidatePath } from 'next/cache';
 
 import { getAdminSession } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import {
   cancelBooking,
   confirmBooking,
   createGuestBooking,
   EventNotBookableError,
+  InvalidSeatError,
   requestSeats,
+  SeatHoldLimitError,
   SeatUnavailableError,
 } from '@/lib/seat-locking';
 import {
@@ -128,7 +131,9 @@ export async function createGuestBookingAction(
 // the seat-locking transaction, so this action is safe even if the page never
 // rendered. On success or a domain failure we revalidate the event page so the
 // seat map re-renders with fresh state (a taken seat shows as taken) in the
-// same roundtrip.
+// same roundtrip. The revalidation path uses the server-side event slug, not
+// the client-provided one, so a stale or tampered slug cannot keep a booked
+// event's seat map stale.
 export async function requestSeatAction(
   formData: FormData,
 ): Promise<RequestSeatActionState> {
@@ -144,8 +149,13 @@ export async function requestSeatAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
   }
 
-  const slug = formValue(formData, 'slug');
   const { caseType, eventSeatIds, ...attendee } = parsed.data;
+
+  const event = await prisma.event.findUnique({
+    where: { id: parsed.data.eventId },
+    select: { slug: true },
+  });
+  const slug = event?.slug ?? null;
 
   try {
     const created = await requestSeats({
@@ -174,7 +184,13 @@ export async function requestSeatAction(
     if (error instanceof SeatUnavailableError) {
       return { ok: false, error: error.message };
     }
+    if (error instanceof InvalidSeatError) {
+      return { ok: false, error: error.message };
+    }
     if (error instanceof EventNotBookableError) {
+      return { ok: false, error: error.message };
+    }
+    if (error instanceof SeatHoldLimitError) {
       return { ok: false, error: error.message };
     }
 
