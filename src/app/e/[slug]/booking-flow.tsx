@@ -1,7 +1,8 @@
 'use client';
 
+import { SeatStatus } from '@prisma/client';
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 
 import {
   requestSeatStateAction,
@@ -69,9 +70,7 @@ export function BookingFlow({
   seatGroups: PublicSeatGroup[];
   gapSeats: PublicGapSeat[];
 }) {
-  const [selectedSeatIds, setSelectedSeatIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [selection, setSelection] = useState<Set<string>>(() => new Set());
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [state, formAction, pending] = useActionState(
@@ -94,6 +93,37 @@ export function BookingFlow({
     }
   }
 
+  // The seats that were available the last time the page rendered. After a
+  // failed request (a seat taken by someone else between load and submit) the
+  // page re-renders with fresh seat data and that seat renders disabled — and
+  // a disabled button cannot fire onClick, so it would stay stuck in the
+  // selection. The selection is therefore always intersected with the
+  // available seats: the stale seat drops out of the map, the summary, and
+  // the submitted form, even before the attendee interacts again.
+  const availableSeatIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const group of seatGroups) {
+      for (const row of group.rows) {
+        for (const seat of row.seats) {
+          if (seat.status === SeatStatus.AVAILABLE) {
+            ids.add(seat.id);
+          }
+        }
+      }
+    }
+    return ids;
+  }, [seatGroups]);
+
+  const selectedSeatIds = useMemo(() => {
+    const effective = new Set<string>();
+    for (const id of selection) {
+      if (availableSeatIds.has(id)) {
+        effective.add(id);
+      }
+    }
+    return effective;
+  }, [selection, availableSeatIds]);
+
   const selectedSeats = Array.from(selectedSeatIds)
     .map((id) => seatById.get(id))
     .filter((seat): seat is SelectedSeat => seat != null);
@@ -104,8 +134,15 @@ export function BookingFlow({
     if (pending) {
       return;
     }
-    setSelectedSeatIds((prev) => {
+    setSelection((prev) => {
+      // Toggling is the first interaction after a failed submit; prune any
+      // seat that is no longer available so it cannot linger in the set.
       const next = new Set(prev);
+      for (const id of prev) {
+        if (!availableSeatIds.has(id)) {
+          next.delete(id);
+        }
+      }
       if (next.has(seatId)) {
         next.delete(seatId);
       } else if (next.size < MAX_PUBLIC_BOOKING_SEATS) {
