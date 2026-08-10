@@ -1,10 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-
 import { SeatMap as VenueSeatMap, type SeatMapRow } from '@/components/seat-map';
 import type { PublicGapSeat, PublicSeatGroup } from '@/lib/public-events';
-import { buildSeatMapData } from '@/lib/seat-map-data';
+import { buildSeatMapData, type SeatMapDataInput } from '@/lib/seat-map-data';
 
 // Feeds the shared SeatMap component with the event's live seat data. A single
 // venue row can hold seats from more than one section, so rows are merged
@@ -13,17 +11,24 @@ import { buildSeatMapData } from '@/lib/seat-map-data';
 // click behavior and the taken-seat grey-out. Gap seats (blocked-out venue
 // positions) have no section and are fed in flat, so they render as empty
 // slots that keep the row layout intact.
+//
+// Selection is controlled by the parent: the parent owns `selectedSeatIds`
+// and toggles membership in `onSelect` so the booking flow can show the
+// request form for the tapped seats. Seat ids are EventSeat ids — the values
+// the request needs.
 
 export function SeatMap({
   seatGroups,
   gapSeats,
+  selectedSeatIds,
+  onSelect,
 }: {
   seatGroups: PublicSeatGroup[];
   gapSeats: PublicGapSeat[];
+  selectedSeatIds: string[];
+  onSelect: (seatId: string) => void;
 }) {
-  const [selectedSeatId, setSelectedSeatId] = useState('');
-
-  const seats = [
+  const seats: SeatMapDataInput[] = [
     ...seatGroups.flatMap((group) =>
       group.rows.flatMap((row) =>
         row.seats.map((seat) => ({
@@ -55,11 +60,8 @@ export function SeatMap({
       gap: seat.gap,
       color: seat.available ? seat.color : '#e5e7eb',
       disabled: !seat.available,
-      selected: selectedSeatId === seat.venueSeatId,
-      onClick: () =>
-        setSelectedSeatId(
-          selectedSeatId === seat.venueSeatId ? '' : seat.venueSeatId,
-        ),
+      selected: selectedSeatIds.includes(seat.id),
+      onClick: () => onSelect(seat.id),
       ariaLabel: `${seat.section} section, row ${dataRow.row}, seat ${
         seat.number
       }${seat.available ? '' : ', taken'}`,

@@ -26,3 +26,29 @@ export const guestBookingSchema = z.object({
 });
 
 export type GuestBookingInput = z.infer<typeof guestBookingSchema>;
+
+// Public (attendee-facing) seat request. `caseType` is restricted to the two
+// attendee-facing cases — GUEST is admin-only and is never accepted here.
+// One booking is created per seat, so multiple seats arrive as an array.
+export const MAX_PUBLIC_BOOKING_SEATS = 8;
+
+export const publicRequestSchema = z.object({
+  eventId: z.string().trim().min(1, 'Event is required.'),
+  eventSeatIds: z
+    .array(z.string().trim().min(1, 'Seat is required.'))
+    .min(1, 'Select at least one seat.')
+    .max(
+      MAX_PUBLIC_BOOKING_SEATS,
+      `Select up to ${MAX_PUBLIC_BOOKING_SEATS} seats at a time.`,
+    )
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Duplicate seats selected.',
+    }),
+  userName: z.string().trim().min(1, 'Name is required.').max(120),
+  userPhone: z.string().trim().min(1, 'Phone is required.').max(40),
+  caseType: z.enum(['ONLINE_CODE', 'PAY_AT_DOOR'], {
+    message: 'Invalid booking type.',
+  }),
+});
+
+export type PublicRequestInput = z.infer<typeof publicRequestSchema>;

@@ -11,9 +11,40 @@ export class SeatUnavailableError extends Error {
   }
 }
 
+export class EventNotBookableError extends Error {
+  constructor(message = 'This event is no longer accepting bookings') {
+    super(message);
+    this.name = 'EventNotBookableError';
+  }
+}
+
 type ActionResult<T = undefined> =
   | (T extends undefined ? { ok: true } : { ok: true } & T)
   | { ok: false; error: string };
+
+// A public request must only ever succeed against a bookable event: PUBLISHED,
+// not CLOSED or CANCELED, and not yet started. Checked inside the same
+// transaction as the guarded seat lock (a Server Action can be invoked without
+// the page ever rendering, so the mutation itself is the enforcement point,
+// never the UI). The guarded updateMany below also re-checks the event in its
+// WHERE clause, so the bookability guard and the seat lock are atomic even if
+// the event state changes between the read and the update.
+async function assertEventBookable(tx: Prisma.TransactionClient, eventId: string) {
+  const event = await tx.event.findUnique({
+    where: { id: eventId },
+    select: { status: true, startsAt: true },
+  });
+
+  if (
+    !event ||
+    // Any status other than PUBLISHED is not bookable — this covers CLOSED,
+    // CANCELED, and DRAFT alike.
+    event.status !== EventStatus.PUBLISHED ||
+    event.startsAt <= new Date()
+  ) {
+    throw new EventNotBookableError('This event is no longer accepting bookings.');
+  }
+}
 
 async function uniqueReferenceCode(tx: Prisma.TransactionClient) {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -31,70 +62,86 @@ async function uniqueReferenceCode(tx: Prisma.TransactionClient) {
   throw new Error('Could not generate a unique reference code, please retry');
 }
 
-function isUniqueReferenceCodeError(error: unknown) {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === 'P2002' &&
-    'meta' in error &&
-    Array.isArray((error as { meta?: { target?: unknown } }).meta?.target) &&
-    ((error as { meta?: { target?: unknown[] } }).meta?.target ?? []).includes('referenceCode')
-  );
-}
-
-export async function requestSeatOnlineCode(params: {
+// Attendee request for one or more seats. All seats are locked and booked
+// inside a single transaction, so either every selected seat is held or none
+// are — a partial request (one seat already taken) rolls back entirely. Each
+// seat becomes its own PENDING booking; ONLINE_CODE requests share ONE
+// reference code across the group (the attendee uses it once as the payment
+// note), while PAY_AT_DOOR requests get no code and hold longer
+// (PENDING_DOOR_EXPIRY_HOURS). The event-bookability guard runs in the same
+// transaction, so this is the enforcement point even if the page is never
+// rendered.
+export async function requestSeats(params: {
   eventId: string;
-  eventSeatId: string;
+  eventSeatIds: string[];
   userName: string;
   userPhone: string;
-}) {
-  const { eventId, eventSeatId, userName, userPhone } = params;
-  const expiresAt = new Date(Date.now() + env.pendingOnlineExpiryHours * 60 * 60 * 1000);
+  caseType: CaseType;
+}): Promise<{
+  referenceCode: string | null;
+  bookings: Array<{ id: string; eventSeatId: string }>;
+}> {
+  const { eventId, eventSeatIds, userName, userPhone, caseType } = params;
+  const online = caseType === CaseType.ONLINE_CODE;
+  const expiryHours = online
+    ? env.pendingOnlineExpiryHours
+    : env.pendingDoorExpiryHours;
+  const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      return await prisma.$transaction(async (tx) => {
-        const referenceCode = await uniqueReferenceCode(tx);
-        const lockResult = await tx.eventSeat.updateMany({
-          where: {
-            id: eventSeatId,
-            eventId,
-            status: SeatStatus.AVAILABLE,
-          },
-          data: {
-            status: SeatStatus.PENDING,
-            bookedByName: userName,
-            bookedByPhone: userPhone,
-            referenceCode,
-            pendingSince: new Date(),
-            expiresAt,
-          },
-        });
+  return prisma.$transaction(async (tx) => {
+    await assertEventBookable(tx, eventId);
 
-        if (lockResult.count === 0) {
-          throw new SeatUnavailableError();
-        }
+    const now = new Date();
+    // One code for the whole group. uniqueReferenceCode checks for clashes
+    // before inserting, so two different groups never share a code even
+    // though the column itself is no longer unique.
+    const referenceCode = online ? await uniqueReferenceCode(tx) : null;
 
-        return tx.booking.create({
-          data: {
-            eventId,
-            eventSeatId,
-            userName,
-            userPhone,
-            caseType: CaseType.ONLINE_CODE,
-            status: BookingStatus.PENDING,
-            referenceCode,
-            expiresAt,
+    const bookings = [];
+    for (const eventSeatId of eventSeatIds) {
+      const lockResult = await tx.eventSeat.updateMany({
+        where: {
+          id: eventSeatId,
+          eventId,
+          status: SeatStatus.AVAILABLE,
+          event: {
+            status: EventStatus.PUBLISHED,
+            startsAt: { gt: now },
           },
-        });
+        },
+        data: {
+          status: SeatStatus.PENDING,
+          bookedByName: userName,
+          bookedByPhone: userPhone,
+          referenceCode,
+          pendingSince: now,
+          expiresAt,
+        },
       });
-    } catch (error) {
-      if (!isUniqueReferenceCodeError(error) || attempt === 4) {
-        throw error;
+
+      if (lockResult.count === 0) {
+        throw new SeatUnavailableError();
       }
+
+      const booking = await tx.booking.create({
+        data: {
+          eventId,
+          eventSeatId,
+          userName,
+          userPhone,
+          caseType,
+          status: BookingStatus.PENDING,
+          referenceCode,
+          expiresAt,
+        },
+        select: { id: true, eventSeatId: true },
+      });
+
+      bookings.push(booking);
     }
-  }
+
+    return { referenceCode, bookings };
+  });
 }
 
 export async function confirmOnlineCodeBooking(params: {

@@ -189,7 +189,10 @@ userPhone String
 caseType CaseType
 status BookingStatus @default(PENDING)
 
-referenceCode String? @unique // only set for ONLINE_CODE bookings, matched by admin to a payment
+// only set for ONLINE_CODE bookings, matched by admin to a payment.
+// Shared across the bookings of one multi-seat request (the attendee pays
+// once per group with a single code), so it is not unique.
+referenceCode String?
 
 confirmedByAdmin String?
 confirmedAt DateTime?
@@ -209,4 +212,5 @@ eventSeat EventSeat @relation(fields: [eventId, eventSeatId], references: [event
 
 @@index([eventId, status]) // admin dashboard: "show all PENDING bookings for this event"
 @@index([status, expiresAt]) // lazy expiry sweep: "find all PENDING bookings past expiresAt"
+@@index([referenceCode]) // admin: match a payment note code to its group of bookings
 }

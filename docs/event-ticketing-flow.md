@@ -18,7 +18,7 @@ dashboard to confirm bookings and manage events.
   identifying record beyond a name and phone number given at booking time.
 - What they can do:
   - View the event's details and seat map via its unique slug link
-  - Request a seat under one of the supported booking cases
+  - Request one or more seats under one of the supported booking cases
   - Receive a ticket over WhatsApp once their booking is confirmed
 - Structural rules:
   - The event link (slug) is the entire access boundary — anyone with the
@@ -136,12 +136,15 @@ Venue
   over time," as a permanent log even after the seat is later released and
   re-booked by someone else.
 - Lifecycle, case 1 — pay online with code:
-  1. Attendee requests a seat → seat atomically transitions
-     `AVAILABLE → PENDING`, a `Booking` is created `PENDING`, a reference
-     code is generated and shown to the attendee.
+  1. Attendee requests one or more seats → each seat atomically transitions
+     `AVAILABLE → PENDING`, a `Booking` is created `PENDING` per seat, and a
+     single reference code is generated and shown to the attendee. In a
+     multi-seat request the code is shared by all of the group's bookings —
+     the attendee pays once for the whole group using that one code as the
+     payment note.
   2. Attendee pays externally, using the code as a payment note.
-  3. Admin matches the code to a payment and confirms → seat transitions
-     `PENDING → BOOKED`, booking transitions `PENDING → CONFIRMED`.
+  3. Admin matches the code to a payment and confirms the group's bookings
+     (each seat `PENDING → BOOKED`, each booking `PENDING → CONFIRMED`).
   4. If unconfirmed for `PENDING_ONLINE_EXPIRY_HOURS` (default 3h), the hold
       expires: the booking goes `PENDING → EXPIRED` and the seat back to
       `AVAILABLE`, freeing it for a new request. Expiry is a **lazy sweep**
@@ -176,9 +179,11 @@ Venue
   without the page rendering, so the mutation — not the UI — is the guard).
 - Reference codes: generated from a 31-character alphabet that excludes
   visually-ambiguous characters (no `0`/`O`, `1`/`I`/`L`), since attendees
-  may read or copy them by hand. Uniqueness is checked against all
-  bookings ever made (not just active ones), with a bounded retry on
-  collision.
+  may read or copy them by hand. One code is generated per request group
+  (single seat or many) and shared by all of that group's bookings. Uniqueness
+  between groups is checked against all bookings ever made (not just active
+  ones), with a bounded retry on collision; the column itself is no longer
+  DB-unique because one code legitimately appears on several bookings.
 - Event cancellation: only a `PUBLISHED` event whose `startsAt` is still in
   the future can be canceled. In one transaction the event goes
   `PUBLISHED → CANCELED`, every `EventSeat` goes `→ CANCELED` with its hold

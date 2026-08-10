@@ -180,14 +180,14 @@ export function SeatMap({
     <div ref={containerRef} className="space-y-4">
       <div className="flex w-full max-w-full flex-col items-center gap-2">
         {stageLabel ? (
-          <div className="mb-4 w-full rounded-full border border-zinc-300 bg-zinc-100 px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
+          <div className="mb-4 w-full text-center text-xs font-semibold uppercase tracking-[0.3em] text-zinc-600">
             {stageLabel}
           </div>
         ) : null}
         {rowsWithSplits.map(({ row, split }) => {
           return (
             <div key={row.label} className="flex items-center gap-2">
-              <span className="w-8 shrink-0 text-right text-xs text-zinc-500">
+              <span className="w-8 shrink-0 text-right text-xs text-zinc-600">
                 {row.label}
               </span>
               <div className="flex items-center" style={{ gap: seatGap }}>
@@ -262,7 +262,7 @@ export function SeatMap({
               />
               {item.name}
               {item.price != null ? (
-                <span className="text-zinc-400">· {formatPrice(item.price)}</span>
+                <span className="text-zinc-600">· {formatPrice(item.price)}</span>
               ) : null}
             </div>
           ))}

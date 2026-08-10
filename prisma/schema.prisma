@@ -147,7 +147,9 @@ model Booking {
   caseType CaseType
   status   BookingStatus @default(PENDING)
 
-  referenceCode String? @unique
+  // Shared across the bookings of one multi-seat request — the attendee uses
+  // it once as the payment note. Not unique: several seats can share a code.
+  referenceCode String?
 
   confirmedByAdmin String?
   confirmedAt      DateTime?
