@@ -36,6 +36,8 @@ function OccupancyBar({ occupied, total }: { occupied: number; total: number }) 
 export default async function AdminDashboardPage() {
   await expirePastDuePendingBookings();
 
+  const now = new Date();
+
   const events = await prisma.event.findMany({
     where: { status: EventStatus.PUBLISHED },
     orderBy: { startsAt: 'desc' },
@@ -215,12 +217,14 @@ export default async function AdminDashboardPage() {
                       >
                         View bookings
                       </Link>
-                      <Link
-                        href={`/admin/bookings/new?eventId=${event.id}`}
-                        className="inline-flex h-11 w-full items-center justify-center rounded-md border border-zinc-300 px-4 text-sm font-medium text-zinc-700 sm:w-auto"
-                      >
-                        Guest booking
-                      </Link>
+                      {event.status === EventStatus.PUBLISHED && event.startsAt > now ? (
+                        <Link
+                          href={`/admin/bookings/new?eventId=${event.id}`}
+                          className="inline-flex h-11 w-full items-center justify-center rounded-md border border-zinc-300 px-4 text-sm font-medium text-zinc-700 sm:w-auto"
+                        >
+                          Guest booking
+                        </Link>
+                      ) : null}
                     </div>
                   </article>
                 );
