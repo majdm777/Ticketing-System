@@ -1,5 +1,7 @@
 'use client';
 
+import { SeatStatus } from '@prisma/client';
+
 import { SeatMap as VenueSeatMap, type SeatMapRow } from '@/components/seat-map';
 import type { PublicGapSeat, PublicSeatGroup } from '@/lib/public-events';
 import { buildSeatMapData, type SeatMapDataInput } from '@/lib/seat-map-data';
@@ -68,14 +70,26 @@ export function SeatMap({
     })),
   }));
 
+  const hasTakenSeats = seatGroups.some((group) =>
+    group.rows.some((row) =>
+      row.seats.some((seat) => seat.status !== SeatStatus.AVAILABLE),
+    ),
+  );
+
   return (
     <VenueSeatMap
       rows={rows}
-      legend={seatGroups.map((group) => ({
-        name: group.section,
-        color: group.color,
-        price: group.price,
-      }))}
+      legend={[
+        ...seatGroups.map((group) => ({
+          id: `section:${group.section}`,
+          name: group.section,
+          color: group.color,
+          price: group.price,
+        })),
+        ...(hasTakenSeats
+          ? [{ id: 'taken', name: 'Taken', color: '#e5e7eb' }]
+          : []),
+      ]}
     />
   );
 }

@@ -130,12 +130,13 @@ export default async function AdminBookingsPage({
 
   const legend: SeatMapLegendItem[] = [
     ...Array.from(sectionsByName.values()).map((section) => ({
+      id: `section:${section.name}`,
       name: section.name,
       color: sectionColors.get(section.name) ?? '#e5e7eb',
       price: section.price,
     })),
-    { name: 'Booked', color: '#18181b' },
-    { name: 'Pending', color: '#f97316' },
+    { id: 'booked', name: 'Booked', color: '#18181b' },
+    { id: 'pending', name: 'Pending', color: '#f97316' },
   ];
 
   return (

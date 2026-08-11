@@ -42,6 +42,7 @@ export type SeatMapRow = {
 };
 
 export type SeatMapLegendItem = {
+  id: string;
   name: string;
   color: string;
   price?: number | null;
@@ -252,7 +253,7 @@ export function SeatMap({
         <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-200 pt-4">
           {legend.map((item) => (
             <div
-              key={item.name}
+              key={item.id}
               className="flex items-center gap-1.5 text-sm text-zinc-600"
             >
               <span
@@ -381,7 +382,7 @@ function SeatButton({
         isGap
           ? 'border-dashed border-zinc-400'
           : seat.selected
-            ? 'border-black ring-2 ring-offset-1 ring-black'
+            ? 'border-2 border-black ring-4 ring-offset-2 ring-black'
             : seat.disabled
               ? 'cursor-not-allowed border-zinc-300'
               : 'border-zinc-300'
