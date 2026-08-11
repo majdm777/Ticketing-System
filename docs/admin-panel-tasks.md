@@ -107,7 +107,11 @@ first — they are the source of truth for the domain and schema.
 - `src/lib/seat-locking.ts` — atomic seat + booking transitions
 - `src/lib/validation/bookings.ts` — Zod schemas for booking actions
 - `src/lib/actions/bookings.ts` — Server Actions (confirm/cancel/guest)
+- `src/lib/booking-groups.ts` — request grouping key + seat label helpers
 - `src/app/admin/bookings/page.tsx` — booking list per event
+- `src/app/admin/bookings/pending-booking-actions.tsx` — per-seat Confirm/Cancel
+- `src/app/admin/bookings/pending-request-actions.tsx` — request-level Confirm/Cancel
+- `src/app/admin/bookings/request-row.tsx` — expandable request row (card/table)
 - `src/app/admin/bookings/new/page.tsx` — create guest booking (seat map)
 
 **Behavior**
@@ -121,6 +125,14 @@ first — they are the source of truth for the domain and schema.
    - `cancelBooking({ bookingId })` — booking `→ CANCELLED` (set `cancelledAt`)
      and seat `→ AVAILABLE`, resetting seat hold fields (`bookedByName`,
      `bookedByPhone`, `referenceCode`, `pendingSince`, `expiresAt`).
+   - `confirmBookingGroup({ bookingId, adminId })` /
+     `cancelBookingGroup({ bookingId })` — request-level variants: the passed
+     `bookingId` is any member, the group is resolved by the request's shared
+     key (see `requestGroupKey` in `src/lib/booking-groups.ts`), and every
+     still-`PENDING` member is flipped in one transaction (bookings `→
+     CONFIRMED` + seats `PENDING → BOOKED`, or `→ CANCELLED` + seats `→
+     AVAILABLE`). All-or-nothing: if any seat is no longer `PENDING`, the whole
+     request rolls back and an error is returned.
    - `createGuestBooking({ eventId, venueSeatIds, userName, userPhone,
      adminId })` — one seat each `AVAILABLE → BOOKED`, create a `Booking` per
      seat directly `CONFIRMED` with `caseType: GUEST`, `confirmedByAdmin`,
@@ -134,11 +146,25 @@ first — they are the source of truth for the domain and schema.
    - Generate ONLINE_CODE reference codes here per the alphabet rule in
      Shared Conventions #10.
 2. Booking list page — read `?eventId=`, show that event's bookings with a
-   status filter (all/pending/confirmed/cancelled/expired). For each PENDING
-   booking show `userName`, `userPhone`, `caseType`, and its `referenceCode`
-   (so the admin can match it against the external payment note). Buttons:
-   **Confirm** and **Cancel**. Confirmed rows show `referenceCode`,
-   `confirmedByAdmin`, `confirmedAt`. Below the list, render the shared seat
+   status filter (all/pending/confirmed/cancelled/expired). The per-seat rows
+   are collapsed into **one row per request** (grouping key in
+   `src/lib/booking-groups.ts`: `referenceCode` for ONLINE_CODE, else
+   `userName`/`userPhone`/`caseType`/`expiresAt` for PAY_AT_DOOR; GUEST rows
+   stay per-seat). Each request row shows `userName`, `userPhone`, `caseType`,
+   the shared `referenceCode` (so the admin can match it against the external
+   payment note), the request's **total cost** (Σ of the seats' section
+   prices), and a status breakdown (e.g. "2 PENDING / 1 CONFIRMED") when mixed.
+   Two levels of actions:
+   - **Request level** — Confirm and Cancel buttons (`PendingRequestActions`)
+     that act on the whole request at once. Always visible (no expansion
+     needed for one-click accept).
+   - **Per seat** — the request row is expandable (down-arrow button, touch
+     target ≥ 44px, `aria-expanded`; mobile cards use a header toggle, desktop
+     a summary `<tr>` + full-width detail `<tr>`) and lists each seat with its
+     own Confirm/Cancel (`PendingBookingActions`), so the admin can accept
+     seats individually.
+   Confirmed rows show `referenceCode`, `confirmedByAdmin`, `confirmedAt`.
+   Below the list, render the shared seat
    map in **read-only** mode (see `docs/seat-map-fragment.md`) showing the
    whole event's occupancy — BOOKED seats `#18181b`, PENDING holds `#f97316`,
    CANCELED/freed seats `#e4e4e7`, available seats in their section color —
@@ -162,6 +188,14 @@ first — they are the source of truth for the domain and schema.
 - [ ] Cancelling flips the seat back to `AVAILABLE` and clears hold fields
 - [ ] Two admins clicking Confirm on the same booking at once — exactly one
       wins, the other gets a typed error (guarded update)
+- [ ] A multi-seat ONLINE_CODE request (one code) and a multi-seat PAY_AT_DOOR
+      request each render as a single request row; two PAY_AT_DOOR requests by
+      the same phone with different expiry windows stay separate rows
+- [ ] Request-level Confirm confirms every PENDING seat/booking of the request
+      in one click; if one seat was taken meanwhile, the whole request rolls
+      back and an error is returned
+- [ ] Expanding a request row shows each seat with its own Confirm/Cancel;
+      per-seat confirm updates the row's status breakdown and total
 - [ ] Guest booking on an AVAILABLE seat succeeds and is `CONFIRMED` with
       `caseType: GUEST`; a seat already PENDING/BOOKED cannot be guest-booked
 - [ ] Multi-seat guest booking (2–10 seats, one name/phone) creates one
@@ -197,9 +231,18 @@ first — they are the source of truth for the domain and schema.
    **Gap seats**: selected seats can also be **Marked as gap** instead of
    assigned to a section — a gap keeps its `(row, number)` position (so the
    map layout and numbering stay intact) but is stored with `gap: true` and a
-   null `sectionId`, is never cloned as an available event seat, and can never
+   null `sectionId`, is never cloned as an available event seat, and    can never
    be booked. Gap seats still count toward the row's contiguous `1..N`
    numbering; at least one non-gap seat is required.
+   **Row numbering**: the builder's "Seat map" card has a **Row numbering**
+   toggle (Odd / Even vs In order right-to-left). Both draw a contiguous
+   `1..N` row as three blocks; Odd/Even numbers them center-out, In order
+   numbers them sequentially mirrored right-to-left (seat 1 at the right edge,
+   e.g. `15 14 13 | 12 11 10 9 8 7 6 5 4 | 3 2 1`). It is
+   display-only metadata stored as `Venue.seatLayout` (`ODD_EVEN` default |
+   `IN_ORDER`) and read live through the `Event → Venue` relation, so existing
+   events pick up the venue's choice. Editable only from the builder (create,
+   or edit before any event uses the venue).
 2. Event creation — form: pick an existing venue, name, description,
    `startsAt`, initial status (DRAFT/PUBLISHED). Slug: auto-generate from the
    name (e.g. `jazz-under-the-stars`); ensure uniqueness (append a suffix on
@@ -226,6 +269,10 @@ first — they are the source of truth for the domain and schema.
 - [ ] Creating an event auto-clones every venue seat into an `EventSeat` with
       the correct `venueId`, all `AVAILABLE`
 - [ ] Event slug is unique; DRAFT/PUBLISHED/CLOSED/CANCELED transitions work
+- [ ] The Row numbering toggle persists `Venue.seatLayout`; the venue builder
+      preview, public event page, guest booking, and admin bookings seat map
+      all honor it (Odd/Even = three blocks center-out, In order =
+      right-to-left sequential in the same three blocks)
 - [ ] `npx tsc --noEmit` and `npm run lint` pass
 - [ ] Commit B1 before moving to B2
 
@@ -250,9 +297,12 @@ first — they are the source of truth for the domain and schema.
    (Stats must be scoped to the published event ids — never a global query.
    With no published events, skip the aggregate query entirely.)
 3. **Needs attention**: a queue of PENDING bookings across the published
-   events (newest first, capped at 20), each with inline **Confirm** /
-   **Cancel** actions that also `revalidatePath('/admin')` so the summary
-   updates immediately.
+   events (newest first, capped at 20), collapsed into **one row per request**
+   (same grouping key as the bookings list — see Task A2 §2) showing the
+   attendee, seat labels, the request's total cost, and inline request-level
+   **Confirm** / **Cancel** actions (`PendingRequestActions`) that also
+   `revalidatePath('/admin')` so the summary updates immediately. No per-seat
+   expansion here — it stays at the request level.
 4. **Events at a glance**: one card per published event showing venue, date,
    an occupancy bar (confirmed/bookable, gap-free), a pending-holds pill, and
    links to `/admin/bookings?eventId=...` and

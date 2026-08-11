@@ -104,6 +104,7 @@ export async function createVenue(
         data: {
           name: input.name,
           address: input.address,
+          seatLayout: input.seatLayout,
         },
         select: { id: true },
       });
@@ -155,9 +156,15 @@ export async function updateVenue(
           }
 
           // Full rebuild. Safe because editing is blocked once events exist, so
-          // nothing references these seats/sections yet.
+          // nothing references these seats/sections yet. The layout flag is
+          // display-only metadata and is written alongside the rebuild.
           await tx.venueSeat.deleteMany({ where: { venueId } });
           await tx.venueSection.deleteMany({ where: { venueId } });
+
+          await tx.venue.update({
+            where: { id: venueId },
+            data: { seatLayout: input.seatLayout },
+          });
 
           await createSectionsAndSeats(tx, venueId, input);
 
@@ -190,6 +197,7 @@ export type VenueForEdit = {
   builderData: {
     name: string;
     address: string;
+    seatLayout: 'ODD_EVEN' | 'IN_ORDER';
     rows: { id: string; label: string; seatCount: number }[];
     assignments: Record<string, string>;
     gaps: string[];
@@ -205,6 +213,7 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
       id: true,
       name: true,
       address: true,
+      seatLayout: true,
       _count: { select: { events: true } },
       sections: {
         select: { name: true, price: true },
@@ -332,6 +341,7 @@ export async function getVenueForEdit(venueId: string): Promise<VenueForEdit | n
     builderData: {
       name: venue.name,
       address: venue.address,
+      seatLayout: venue.seatLayout,
       rows,
       assignments,
       gaps,

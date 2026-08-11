@@ -146,11 +146,13 @@ export function BookingFlow({
   eventId,
   seatGroups,
   gapSeats,
+  seatLayout,
 }: {
   slug: string;
   eventId: string;
   seatGroups: PublicSeatGroup[];
   gapSeats: PublicGapSeat[];
+  seatLayout: 'ODD_EVEN' | 'IN_ORDER';
 }) {
   const [selection, setSelection] = useState<Set<string>>(() => new Set());
   const [userName, setUserName] = useState('');
@@ -325,6 +327,7 @@ export function BookingFlow({
       <SeatMap
         seatGroups={seatGroups}
         gapSeats={gapSeats}
+        seatLayout={seatLayout}
         selectedSeatIds={selectedSeats.map((seat) => seat.id)}
         onSelect={toggleSeat}
       />

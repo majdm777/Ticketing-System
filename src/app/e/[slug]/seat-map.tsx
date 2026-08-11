@@ -24,11 +24,13 @@ export function SeatMap({
   gapSeats,
   selectedSeatIds,
   onSelect,
+  seatLayout = 'ODD_EVEN',
 }: {
   seatGroups: PublicSeatGroup[];
   gapSeats: PublicGapSeat[];
   selectedSeatIds: string[];
   onSelect: (seatId: string) => void;
+  seatLayout?: 'ODD_EVEN' | 'IN_ORDER';
 }) {
   const seats: SeatMapDataInput[] = [
     ...seatGroups.flatMap((group) =>
@@ -79,6 +81,7 @@ export function SeatMap({
   return (
     <VenueSeatMap
       rows={rows}
+      seatLayout={seatLayout}
       legend={[
         ...seatGroups.map((group) => ({
           id: `section:${group.section}`,

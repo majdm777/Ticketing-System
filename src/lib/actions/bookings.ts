@@ -6,7 +6,9 @@ import { getAdminSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import {
   cancelBooking,
+  cancelBookingGroup,
   confirmBooking,
+  confirmBookingGroup,
   createGuestBooking,
   EventNotBookableError,
   InvalidSeatError,
@@ -94,6 +96,71 @@ export async function cancelBookingStateAction(
   formData: FormData,
 ): Promise<BookingActionState> {
   return cancelBookingAction(formData);
+}
+
+// Group variants: `bookingId` is any member of the request — confirm/cancel
+// acts on every still-PENDING booking of the group (see seat-locking).
+export async function confirmBookingGroupAction(
+  formData: FormData,
+): Promise<BookingActionState> {
+  const session = await getAdminSession();
+  if (!session) {
+    return { ok: false, error: 'Unauthorized.' };
+  }
+
+  const parsed = bookingIdSchema.safeParse({
+    bookingId: formValue(formData, 'bookingId'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
+  }
+
+  const result = await confirmBookingGroup({
+    bookingId: parsed.data.bookingId,
+    adminId: session.adminName,
+  });
+
+  revalidatePath('/admin/bookings');
+  revalidatePath('/admin');
+  return result.ok ? { ok: true } : result;
+}
+
+export async function confirmBookingGroupStateAction(
+  _previousState: BookingActionState,
+  formData: FormData,
+): Promise<BookingActionState> {
+  return confirmBookingGroupAction(formData);
+}
+
+export async function cancelBookingGroupAction(
+  formData: FormData,
+): Promise<BookingActionState> {
+  const session = await getAdminSession();
+  if (!session) {
+    return { ok: false, error: 'Unauthorized.' };
+  }
+
+  const parsed = bookingIdSchema.safeParse({
+    bookingId: formValue(formData, 'bookingId'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
+  }
+
+  const result = await cancelBookingGroup({ bookingId: parsed.data.bookingId });
+
+  revalidatePath('/admin/bookings');
+  revalidatePath('/admin');
+  return result.ok ? { ok: true } : result;
+}
+
+export async function cancelBookingGroupStateAction(
+  _previousState: BookingActionState,
+  formData: FormData,
+): Promise<BookingActionState> {
+  return cancelBookingGroupAction(formData);
 }
 
 export async function createGuestBookingAction(

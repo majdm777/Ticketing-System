@@ -34,6 +34,12 @@ read live through the shared `VenueSeat` relation (section name/price) stays in
 sync for existing events; adding/removing rows, seat counts, or section
 assignments never appear in an event that already exists.
 
+The **row-numbering layout** (`Venue.seatLayout`) is the same kind of live
+metadata: it is read through the `Event → Venue` relation at render time, so
+editing it in the venue builder updates every existing event's seat map without
+rebuilding anything. It is display-only — seat ids, `venueSeatId`s, prices,
+and booking behavior are identical in both layouts.
+
 ## Contract
 
 The component only draws; callers supply the seat data and click behavior.
@@ -70,13 +76,21 @@ instead of a `<button>` — no button semantics, no tab stop, no cursor, no
 click handling. It is used for display-only maps (e.g. the admin bookings
 review) where `SeatMapSeat.onClick` is absent.
 
+`seatLayout` (default `'ODD_EVEN'`) picks how contiguous `1..N` rows are
+drawn (see Built-in rendering): `'ODD_EVEN'` = three blocks numbered
+center-out, `'IN_ORDER'` = the same three blocks in sequential order mirrored
+right-to-left.
+Callers read it from `event.venue.seatLayout`; the venue builder passes its
+in-progress toggle state.
+
 ### Built-in rendering (do not fork in pages)
 
 All of this lives in the shared component, so it shows up in every caller:
 
 - **Stage bar**: a full-width labeled bar above the rows. `stageLabel`
   defaults to `"STAGE"`; pass `""` to hide it.
-- **Three flat blocks (left | middle | right)**: a contiguous `1..N` row is
+- **Three flat blocks (left | middle | right)** — this is the **ODD_EVEN**
+  layout (the default). A contiguous `1..N` row is
   drawn as three flat blocks separated by two gaps, numbered center-out so
   seat 1 and 2 sit at the middle's center:
   `15 13 11 | 9 7 5 3 1 2 4 6 8 | 10 12 14` (a 15-seat row).
@@ -85,6 +99,15 @@ All of this lives in the shared component, so it shows up in every caller:
   41 seats → `10/21/10`. Rows with fewer than 4 seats, or numbers that
   aren't exactly `1..N`, stay in the caller-provided order as one block.
   Purely visual — seat ids, click targets, and `venueSeatId`s are unchanged.
+- **In-order right-to-left** — the `IN_ORDER` layout renders each row as the
+  **same three flat blocks, but in sequential order mirrored right-to-left**:
+  seat 1 sits at the right edge and the row reads `N … 3 2 1` left-to-right,
+  split into three contiguous blocks with the same geometry as ODD_EVEN
+  (`side = floor(N / 4)`, `middle = N - 2 * side`). A 15-seat row renders
+  `15 14 13 | 12 11 10 9 8 7 6 5 4 | 3 2 1`; 38 seats → `9/20/9`. Rows with
+  fewer than 4 seats keep the caller-provided order in a single block.
+  Controlled by the `seatLayout` prop (`'ODD_EVEN' | 'IN_ORDER'`, default
+  `'ODD_EVEN'`), which mirrors `Venue.seatLayout`.
 - **Seat numbers**: `number` is drawn inside the seat (scaled to the seat
   size, hidden below ~20px). Text color is picked from the seat color for
   contrast.

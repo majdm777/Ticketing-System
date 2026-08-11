@@ -25,6 +25,12 @@ const LABEL_GAP = 8;
 const SHOW_NUMBERS_MIN_SEAT = 20;
 const MIN_ROW_FOR_BLOCKS = 4;
 
+// How a venue numbers its rows' seats. ODD_EVEN draws a contiguous 1..N row as
+// three blocks numbered center-out; IN_ORDER draws it as the same three blocks
+// but in sequential order mirrored right-to-left (seat 1 at the right edge).
+// Mirrors Venue.seatLayout.
+export type SeatLayout = 'ODD_EVEN' | 'IN_ORDER';
+
 export type SeatMapSeat = {
   id: string;
   color: string;
@@ -48,14 +54,15 @@ export type SeatMapLegendItem = {
   price?: number | null;
 };
 
-// A contiguous 1..N row is drawn as three flat blocks — left | gap | middle |
-// gap | right — numbered center-out so seat 1 and 2 sit at the middle's
-// center (15 13 11 | 9 7 5 3 1 2 4 6 8 | 10 12 14 for a 15-seat row).
-// The sides are always equal and smaller than the middle:
+// This is the ODD_EVEN layout. A contiguous 1..N row is drawn as three flat
+// blocks — left | gap | middle | gap | right — numbered center-out so seat 1
+// and 2 sit at the middle's center (15 13 11 | 9 7 5 3 1 2 4 6 8 | 10 12 14
+// for a 15-seat row). The sides are always equal and smaller than the middle:
 //   side = floor(N / 4), middle = N - 2 * side   (38 -> 9/20/9, 41 -> 10/21/10)
 // Rows with fewer than 4 seats, or numbers that aren't exactly 1..N, keep the
-// caller-provided order in a single block. Purely visual — seat ids, click
-// targets, and venueSeatIds are unchanged.
+// caller-provided order in a single block. Rows in the IN_ORDER layout use
+// splitIntoBlocks instead. Purely visual — seat ids, click targets, and
+// venueSeatIds are unchanged.
 export function splitLeftMiddleRight(seats: SeatMapSeat[]): {
   left: SeatMapSeat[];
   middle: SeatMapSeat[];
@@ -101,6 +108,31 @@ export function splitLeftMiddleRight(seats: SeatMapSeat[]): {
   return { left, middle, right };
 }
 
+// This is the IN_ORDER layout. An already-ordered seat array (the caller's
+// order mirrored right-to-left, so seat 1 sits at the right edge) is split
+// into three flat blocks — left | gap | middle | gap | right — using the same
+// geometry as the ODD_EVEN split: side = floor(N / 4), middle = N - 2 * side
+// (15 -> 3/9/3, 38 -> 9/20/9). Unlike ODD_EVEN the blocks are contiguous
+// slices, so a 15-seat row reads 15 14 13 | 12 11 10 9 8 7 6 5 4 | 3 2 1.
+// Rows with fewer than 4 seats keep the caller-provided order in a single
+// block. Purely visual — seat ids, click targets, and venueSeatIds are
+// unchanged.
+function splitIntoBlocks(seats: SeatMapSeat[]): {
+  left: SeatMapSeat[];
+  middle: SeatMapSeat[];
+  right: SeatMapSeat[];
+} | null {
+  const count = seats.length;
+  if (count < MIN_ROW_FOR_BLOCKS) return null;
+
+  const side = Math.floor(count / 4);
+  return {
+    left: seats.slice(0, side),
+    middle: seats.slice(side, count - side),
+    right: seats.slice(count - side),
+  };
+}
+
 function seatTextColor(color: string): string {
   const hex = color.replace('#', '');
   if (hex.length < 6) return '#ffffff';
@@ -121,12 +153,14 @@ export function SeatMap({
   stageLabel = 'STAGE',
   gapEditable = false,
   readOnly = false,
+  seatLayout = 'ODD_EVEN',
 }: {
   rows: SeatMapRow[];
   legend?: SeatMapLegendItem[];
   stageLabel?: string;
   gapEditable?: boolean;
   readOnly?: boolean;
+  seatLayout?: SeatLayout;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(0);
@@ -146,11 +180,21 @@ export function SeatMap({
     return () => observer.disconnect();
   }, []);
 
-  // Compute the three-block split once per row so splitLeftMiddleRight runs a
+  // Compute the per-row rendering once per row so the split logic runs a
   // single time per row (it feeds both the width math and the render below).
+  // ODD_EVEN rows use splitLeftMiddleRight (center-out). IN_ORDER rows are
+  // mirrored right-to-left first, then split into the same three blocks.
   const rowsWithSplits = useMemo(
-    () => rows.map((row) => ({ row, split: splitLeftMiddleRight(row.seats) })),
-    [rows],
+    () =>
+      rows.map((row) => {
+        if (seatLayout === 'IN_ORDER') {
+          const mirrored = [...row.seats].reverse();
+          const split = splitIntoBlocks(mirrored);
+          return { row, split, order: split ? mirrored : row.seats };
+        }
+        return { row, split: splitLeftMiddleRight(row.seats), order: row.seats };
+      }),
+    [rows, seatLayout],
   );
 
   const availW = containerW > 0 ? containerW : 360;
@@ -185,7 +229,7 @@ export function SeatMap({
             {stageLabel}
           </div>
         ) : null}
-        {rowsWithSplits.map(({ row, split }) => {
+        {rowsWithSplits.map(({ row, split, order }) => {
           return (
             <div key={row.label} className="flex items-center gap-2">
               <span className="w-8 shrink-0 text-right text-xs text-zinc-600">
@@ -231,7 +275,7 @@ export function SeatMap({
                     ))}
                   </>
                 ) : (
-                  row.seats.map((seat) => (
+                  order.map((seat) => (
                     <SeatNode
                       key={seat.id}
                       seat={seat}

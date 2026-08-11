@@ -19,6 +19,7 @@ const sectionSchema = z.object({
 export const createVenueSchema = z.object({
   name: z.string().trim().min(1, 'Venue name is required.').max(150),
   address: z.string().trim().min(1, 'Address is required.').max(300),
+  seatLayout: z.enum(['ODD_EVEN', 'IN_ORDER']).default('ODD_EVEN'),
   sections: z.array(sectionSchema).min(1, 'At least one section is required.'),
   seats: z.array(seatSchema).min(1, 'At least one seat is required.'),
 });
@@ -28,6 +29,7 @@ export type SeatInput = z.infer<typeof seatSchema>;
 export type SectionInput = z.infer<typeof sectionSchema>;
 
 export const updateVenueSchema = z.object({
+  seatLayout: z.enum(['ODD_EVEN', 'IN_ORDER']).default('ODD_EVEN'),
   sections: z.array(sectionSchema).min(1, 'At least one section is required.'),
   seats: z.array(seatSchema).min(1, 'At least one seat is required.'),
 });

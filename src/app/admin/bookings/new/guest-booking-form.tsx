@@ -23,10 +23,12 @@ export function GuestBookingForm({
   eventId,
   seats,
   sections,
+  seatLayout = 'ODD_EVEN',
 }: {
   eventId: string;
   seats: SeatMapDataInput[];
   sections: Section[];
+  seatLayout?: 'ODD_EVEN' | 'IN_ORDER';
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<Set<string>>(new Set());
   const [state, formAction, pending] = useActionState(createGuestBookingAction, initialState);
@@ -91,6 +93,7 @@ export function GuestBookingForm({
       <div className="space-y-4 lg:space-y-6">
         <VenueSeatMap
           rows={rows}
+          seatLayout={seatLayout}
           legend={sections.map((section) => ({
             id: `section:${section.name}`,
             name: section.name,
