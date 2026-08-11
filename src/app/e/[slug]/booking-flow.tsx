@@ -43,6 +43,57 @@ function CheckIcon({ className }: { className: string }) {
   );
 }
 
+function CopyCodeButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label="Copy payment reference code"
+      aria-live="polite"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border border-zinc-600 px-3 text-sm font-medium text-white transition-colors hover:border-zinc-400"
+    >
+      {copied ? (
+        <CheckIcon className="h-4 w-4" />
+      ) : (
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+          className="h-4 w-4"
+        >
+          <rect
+            x="6.5"
+            y="6.5"
+            width="9"
+            height="9"
+            rx="1.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M13.5 6.5V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v7A1.5 1.5 0 0 0 5 13.5h1.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+        </svg>
+      )}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 function SeatSummary({ seat }: { seat: SelectedSeat }) {
   return (
     <li className="flex items-center gap-3 rounded-lg border border-emerald-600 bg-emerald-50 px-3 py-2">
@@ -181,9 +232,12 @@ export function BookingFlow({
                 Pay the organizer {formatUsd(bookedTotal)} and use this code as
                 your payment note:
               </p>
-              <p className="mt-2 font-mono text-3xl font-bold tracking-widest text-white">
-                {state.referenceCode}
-              </p>
+              <div className="mt-2 flex items-center justify-center gap-3">
+                <p className="font-mono text-3xl font-bold tracking-widest text-white">
+                  {state.referenceCode}
+                </p>
+                <CopyCodeButton value={state.referenceCode ?? ''} />
+              </div>
             </div>
           ) : (
             <p className="mt-4 text-sm leading-6 text-zinc-700">

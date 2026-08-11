@@ -381,7 +381,7 @@ function SeatButton({
         isGap
           ? 'border-dashed border-zinc-400'
           : seat.selected
-            ? 'border-black ring-2 ring-offset-1 ring-black'
+            ? 'border-2 border-black ring-4 ring-offset-2 ring-black'
             : seat.disabled
               ? 'cursor-not-allowed border-zinc-300'
               : 'border-zinc-300'

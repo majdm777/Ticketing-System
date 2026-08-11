@@ -1,0 +1,4 @@
+# Normalize line endings: the repo stores LF, so text files always commit as
+# LF regardless of the platform they were edited on. Git auto-detects binary
+# files, so they are left untouched.
+* text=auto
