@@ -40,6 +40,7 @@ export type PublicEvent = {
   venue: {
     name: string;
     address: string;
+    seatLayout: 'ODD_EVEN' | 'IN_ORDER';
   };
   seatGroups: PublicSeatGroup[];
   gapSeats: PublicGapSeat[];
@@ -100,7 +101,7 @@ export async function getPublicEventBySlug(
       startsAt: true,
       slug: true,
       status: true,
-      venue: { select: { name: true, address: true } },
+      venue: { select: { name: true, address: true, seatLayout: true } },
     },
   });
 

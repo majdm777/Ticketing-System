@@ -6,12 +6,13 @@ import {
   type SeatMapLegendItem,
   type SeatMapRow,
 } from '@/components/seat-map';
+import { requestGroupKey, seatLabel } from '@/lib/booking-groups';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { buildSeatMapData } from '@/lib/seat-map-data';
 import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
-import { PendingBookingActions } from './pending-booking-actions';
+import { RequestRow, type RequestGroupView } from './request-row';
 
 const statusOptions = ['all', ...Object.values(BookingStatus)] as const;
 
@@ -62,6 +63,56 @@ export default async function AdminBookingsPage({
     : [];
 
   const showScroll = bookings.length >= 10;
+
+  // Collapse the per-seat rows back into one row per attendee request. The
+  // input is already ordered newest-first, so Map insertion order (first
+  // occurrence of each key) yields requests sorted newest-first too. See
+  // requestGroupKey in src/lib/booking-groups.ts for the grouping key.
+  const requestGroups: RequestGroupView[] = (() => {
+    const byKey = new Map<string, (typeof bookings)[number][]>();
+    for (const booking of bookings) {
+      const key = requestGroupKey(booking);
+      const members = byKey.get(key) ?? [];
+      members.push(booking);
+      byKey.set(key, members);
+    }
+
+    const groups: RequestGroupView[] = [];
+    for (const members of byKey.values()) {
+      members.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const rep = members[0];
+      const statusCounts = new Map<string, number>();
+      let totalUsd = 0;
+      for (const member of members) {
+        statusCounts.set(member.status, (statusCounts.get(member.status) ?? 0) + 1);
+        totalUsd += member.eventSeat.venueSeat.section?.price ?? 0;
+      }
+      const statusText = Array.from(statusCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([status, count]) => `${count} ${status}`)
+        .join(' / ');
+      groups.push({
+        key: requestGroupKey(rep),
+        representativeBookingId: rep.id,
+        attendeeName: rep.userName,
+        attendeePhone: rep.userPhone,
+        caseType: rep.caseType,
+        referenceCode: rep.referenceCode,
+        totalUsd,
+        statusText,
+        hasPending: statusCounts.has(BookingStatus.PENDING),
+        confirmedByAdmin: rep.confirmedByAdmin,
+        confirmedAt: rep.confirmedAt,
+        seats: members.map((member) => ({
+          bookingId: member.id,
+          label: seatLabel(member),
+          status: member.status,
+          referenceCode: member.referenceCode,
+        })),
+      });
+    }
+    return groups;
+  })();
 
   // Whole-event occupancy for the read-only seat map. EventSeat.status is the
   // source of truth (kept in sync by booking confirm/pending/expiry flows),
@@ -211,56 +262,11 @@ export default async function AdminBookingsPage({
               showScroll ? 'max-h-[560px] overflow-y-auto pb-3' : ''
             }`}
           >
-            {bookings.map((booking) => (
-              <article key={booking.id} className="rounded-lg border border-zinc-200 bg-white p-4">
-                <div className="space-y-3">
-                  <div>
-                    <div className="font-medium">{booking.userName}</div>
-                    <div className="text-sm text-zinc-600">{booking.userPhone}</div>
-                  </div>
-
-                  <dl className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <dt className="text-xs uppercase text-zinc-500">Seat</dt>
-                      <dd className="text-zinc-700">
-                        {booking.eventSeat.venueSeat.section?.name}{' '}
-                        {booking.eventSeat.venueSeat.row}
-                        {booking.eventSeat.venueSeat.number}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase text-zinc-500">Case</dt>
-                      <dd>{booking.caseType}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase text-zinc-500">Status</dt>
-                      <dd>{booking.status}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase text-zinc-500">Reference</dt>
-                      <dd className="font-mono">{booking.referenceCode ?? '-'}</dd>
-                    </div>
-                    <div className="col-span-2">
-                      <dt className="text-xs uppercase text-zinc-500">Confirmed</dt>
-                      <dd className="text-zinc-700">
-                        <div>{booking.confirmedByAdmin ?? '-'}</div>
-                        <div>{formatDate(booking.confirmedAt)}</div>
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div>
-                    {booking.status === BookingStatus.PENDING ? (
-                      <PendingBookingActions bookingId={booking.id} />
-                    ) : (
-                      <span className="text-sm text-zinc-500">No actions available.</span>
-                    )}
-                  </div>
-                </div>
-              </article>
+            {requestGroups.map((group) => (
+              <RequestRow key={group.key} group={group} variant="card" />
             ))}
 
-            {bookings.length === 0 ? (
+            {requestGroups.length === 0 ? (
               <p className="rounded-lg border border-zinc-100 bg-white px-4 py-8 text-center text-base text-zinc-500">
                 No bookings match this view.
               </p>
@@ -276,46 +282,23 @@ export default async function AdminBookingsPage({
               <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500">
                 <tr>
                   <th className="px-4 py-3">Attendee</th>
-                  <th className="px-4 py-3">Seat</th>
+                  <th className="px-4 py-3">Seats</th>
                   <th className="px-4 py-3">Case</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Confirmed</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {bookings.map((booking) => (
-                  <tr key={booking.id}>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{booking.userName}</div>
-                      <div className="text-zinc-600">{booking.userPhone}</div>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-700">
-                      {booking.eventSeat.venueSeat.section?.name}{' '}
-                      {booking.eventSeat.venueSeat.row}
-                      {booking.eventSeat.venueSeat.number}
-                    </td>
-                    <td className="px-4 py-3">{booking.caseType}</td>
-                    <td className="px-4 py-3">{booking.status}</td>
-                    <td className="px-4 py-3 font-mono">{booking.referenceCode ?? '-'}</td>
-                    <td className="px-4 py-3 text-zinc-700">
-                      <div>{booking.confirmedByAdmin ?? '-'}</div>
-                      <div>{formatDate(booking.confirmedAt)}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {booking.status === BookingStatus.PENDING ? (
-                        <PendingBookingActions bookingId={booking.id} />
-                      ) : (
-                        <span className="text-zinc-500">-</span>
-                      )}
-                    </td>
-                  </tr>
+              <tbody>
+                {requestGroups.map((group) => (
+                  <RequestRow key={group.key} group={group} variant="table" />
                 ))}
               </tbody>
             </table>
 
-            {bookings.length === 0 ? (
+            {requestGroups.length === 0 ? (
               <p className="border-t border-zinc-100 px-4 py-8 text-center text-base text-zinc-500">
                 No bookings match this view.
               </p>
@@ -331,7 +314,12 @@ export default async function AdminBookingsPage({
                 Booked seats are dark, pending holds are orange.
               </p>
             </div>
-            <VenueSeatMap readOnly rows={mapRows} legend={legend} />
+            <VenueSeatMap
+              readOnly
+              rows={mapRows}
+              legend={legend}
+              seatLayout={event.venue.seatLayout}
+            />
           </section>
         </>
       ) : (

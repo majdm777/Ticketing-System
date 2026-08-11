@@ -1,13 +1,14 @@
 import { BookingStatus, EventStatus, SeatStatus } from '@prisma/client';
 import Link from 'next/link';
 
-import { formatPrice } from '@/lib/currency';
+import { requestGroupKey, seatLabel } from '@/lib/booking-groups';
+import { formatPrice, formatUsd } from '@/lib/currency';
 import { countBookableSeats, getDashboardStats } from '@/lib/events';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
-import { PendingBookingActions } from './bookings/pending-booking-actions';
+import { PendingRequestActions } from './bookings/pending-request-actions';
 
 const statusStyles: Record<EventStatus, string> = {
   DRAFT: 'bg-zinc-100 text-zinc-600',
@@ -87,6 +88,39 @@ export default async function AdminDashboardPage() {
     pendingBookingGroups.map((group) => [group.eventId, group._count._all]),
   );
 
+  // One row per attendee request, not per seat — the same grouping key the
+  // bookings page uses, so a multi-seat hold is confirmed or cancelled once.
+  const pendingRequestGroups = (() => {
+    const byKey = new Map<string, (typeof pendingBookings)[number][]>();
+    for (const booking of pendingBookings) {
+      const key = requestGroupKey(booking);
+      const members = byKey.get(key) ?? [];
+      members.push(booking);
+      byKey.set(key, members);
+    }
+    return Array.from(byKey.values()).map((members) => {
+      members.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const rep = members[0];
+      const totalUsd = members.reduce(
+        (sum, member) => sum + (member.eventSeat.venueSeat.section?.price ?? 0),
+        0,
+      );
+      return {
+        key: requestGroupKey(rep),
+        representativeBookingId: rep.id,
+        attendeeName: rep.userName,
+        attendeePhone: rep.userPhone,
+        eventId: rep.event.id,
+        eventName: rep.event.name,
+        seatCount: members.length,
+        seatLabels: members.map(seatLabel),
+        totalUsd,
+        createdAt: rep.createdAt,
+        expiresAt: rep.expiresAt,
+      };
+    });
+  })();
+
   const occupancyPct =
     stats.bookableSeats > 0
       ? Math.round(((stats.bookedSeats + stats.pendingSeats) / stats.bookableSeats) * 100)
@@ -131,38 +165,48 @@ export default async function AdminDashboardPage() {
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase text-zinc-500">Needs attention</h2>
-            {pendingBookings.length === 0 ? (
+            {pendingRequestGroups.length === 0 ? (
               <p className="rounded-lg border border-zinc-200 bg-white p-6 text-base leading-6 text-zinc-600">
                 All caught up — no pending holds need action.
               </p>
             ) : (
               <ul className="space-y-3">
-                {pendingBookings.map((booking) => (
-                  <li key={booking.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                {pendingRequestGroups.map((group) => (
+                  <li
+                    key={group.key}
+                    className="rounded-lg border border-zinc-200 bg-white p-4"
+                  >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-1">
                         <div className="font-medium">
-                          {booking.userName}
-                          <span className="font-normal text-zinc-500"> · {booking.userPhone}</span>
+                          {group.attendeeName}
+                          <span className="font-normal text-zinc-500">
+                            {' '}
+                            · {group.attendeePhone}
+                          </span>
                         </div>
                         <p className="text-sm leading-6 text-zinc-600">
                           <Link
-                            href={`/admin/bookings?eventId=${booking.event.id}`}
+                            href={`/admin/bookings?eventId=${group.eventId}`}
                             className="font-medium text-zinc-900 hover:underline"
                           >
-                            {booking.event.name}
+                            {group.eventName}
                           </Link>
                           <span aria-hidden="true"> · </span>
-                          {booking.eventSeat.venueSeat.section?.name}{' '}
-                          {booking.eventSeat.venueSeat.row}
-                          {booking.eventSeat.venueSeat.number}
+                          {group.seatCount} seat{group.seatCount === 1 ? '' : 's'} ·{' '}
+                          {group.seatLabels.join(', ')}
+                        </p>
+                        <p className="text-sm font-medium text-zinc-900">
+                          Total {formatUsd(group.totalUsd)}
                         </p>
                         <p className="text-xs text-zinc-500">
-                          Held {formatDate(booking.createdAt)}
-                          {booking.expiresAt ? ` · expires ${formatDate(booking.expiresAt)}` : ''}
+                          Held {formatDate(group.createdAt)}
+                          {group.expiresAt
+                            ? ` · expires ${formatDate(group.expiresAt)}`
+                            : ''}
                         </p>
                       </div>
-                      <PendingBookingActions bookingId={booking.id} />
+                      <PendingRequestActions bookingId={group.representativeBookingId} />
                     </div>
                   </li>
                 ))}

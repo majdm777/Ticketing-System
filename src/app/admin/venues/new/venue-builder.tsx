@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { buildSectionColorMap } from '@/lib/section-colors';
 import { formatPrice } from '@/lib/currency';
-import { SeatMap } from '@/components/seat-map';
+import { SeatMap, type SeatLayout } from '@/components/seat-map';
 import {
   createVenueAction,
   updateVenueAction,
@@ -21,6 +21,7 @@ type RowDraft = {
 export type VenueBuilderInitialData = {
   name: string;
   address: string;
+  seatLayout: SeatLayout;
   rows: { id: string; label: string; seatCount: number }[];
   assignments: Record<string, string>;
   gaps: string[];
@@ -111,6 +112,9 @@ export function VenueBuilder({
 
   const [name, setName] = useState(initialData?.name ?? '');
   const [address, setAddress] = useState(initialData?.address ?? '');
+  const [seatLayout, setSeatLayout] = useState<SeatLayout>(
+    initialData?.seatLayout ?? 'ODD_EVEN',
+  );
   const [result, setResult] = useState<VenueActionState>({ ok: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -337,8 +341,8 @@ export function VenueBuilder({
     setIsSubmitting(true);
     try {
       const actionResult = isEditing && venueId
-        ? await updateVenueAction(venueId, { sections, seats })
-        : await createVenueAction({ name, address, sections, seats });
+        ? await updateVenueAction(venueId, { seatLayout, sections, seats })
+        : await createVenueAction({ name, address, seatLayout, sections, seats });
       setResult(actionResult);
     } catch {
       setResult({
@@ -523,9 +527,62 @@ export function VenueBuilder({
       </div>
 
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-bold mb-4">Seat map</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Seat map</h2>
+        </div>
+
+        <fieldset className="mb-5">
+          <legend className="text-sm font-medium text-gray-700 mb-2">Row numbering</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              aria-pressed={seatLayout === 'ODD_EVEN'}
+              onClick={() => setSeatLayout('ODD_EVEN')}
+              className={`min-h-[44px] rounded-md border px-4 py-3 text-left text-sm font-medium transition-colors ${
+                seatLayout === 'ODD_EVEN'
+                  ? 'border-black bg-black text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Odd / Even
+              <span
+                className={`block text-xs font-normal mt-1 ${
+                  seatLayout === 'ODD_EVEN' ? 'text-gray-300' : 'text-gray-500'
+                }`}
+              >
+                Numbered center-out in three blocks — seat 1 and 2 in the middle
+                (15 13 11 | 9 7 5 3 1 2 4 6 8 | 10 12 14).
+              </span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={seatLayout === 'IN_ORDER'}
+              onClick={() => setSeatLayout('IN_ORDER')}
+              className={`min-h-[44px] rounded-md border px-4 py-3 text-left text-sm font-medium transition-colors ${
+                seatLayout === 'IN_ORDER'
+                  ? 'border-black bg-black text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              In order (right-to-left)
+              <span
+                className={`block text-xs font-normal mt-1 ${
+                  seatLayout === 'IN_ORDER' ? 'text-gray-300' : 'text-gray-500'
+                }`}
+              >
+                Sequential, mirrored into three blocks — seat 1 at the right
+                edge (15 14 13 | 12 11 10 9 8 7 6 5 4 | 3 2 1).
+              </span>
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Display-only: seat numbering, prices, and booking all stay the same either way.
+          </p>
+        </fieldset>
+
         <SeatMap
           gapEditable
+          seatLayout={seatLayout}
           rows={rows.map((row) => ({
             label: row.label,
             seats: Array.from({ length: row.seatCount ?? 0 }).map(

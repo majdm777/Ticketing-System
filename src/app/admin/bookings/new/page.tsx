@@ -82,7 +82,12 @@ export default async function NewGuestBookingPage({
               <h2 className="font-semibold tracking-tight">{event.name}</h2>
               <p className="text-sm leading-6 text-zinc-600">{event.venue.name}</p>
             </section>
-            <GuestBookingForm eventId={event.id} seats={flatSeats} sections={sections} />
+            <GuestBookingForm
+              eventId={event.id}
+              seats={flatSeats}
+              sections={sections}
+              seatLayout={event.venue.seatLayout}
+            />
           </>
         ) : (
           <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">

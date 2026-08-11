@@ -167,6 +167,20 @@ Venue
     entirely. An admin can guest-book several seats at once for the same
     guest (same name/phone): one `Booking` per seat, and the claim over the
     batch is atomic (any taken seat rolls the whole batch back).
+- Admin view of requests: bookings are stored one row per seat, so the admin
+  pages collapse a request back into one row. The grouping key is the
+  request's shared identity — `referenceCode` for ONLINE_CODE requests, or the
+  `userName`/`userPhone`/`caseType`/`expiresAt` tuple stamped by `requestSeats`
+  for PAY_AT_DOOR (GUEST bookings, created `CONFIRMED`, stay one row per seat).
+  Each request row shows its seats, the total cost the attendee owes (Σ of the
+  seats' section prices), and one Confirm/Cancel that acts on the **whole
+  request** in a single guarded transaction (`confirmBookingGroup` /
+  `cancelBookingGroup` — any seat that was taken in the meantime rolls back the
+  whole request). The row is expandable to show each seat with its own
+  per-booking Confirm/Cancel, so the admin can accept the entire request with
+  one click or accept seats individually. The dashboard's "Needs attention"
+  list uses the same grouping at the request level (no per-seat expansion).
+
 - Locking rule that applies to all three cases: every state transition is a
   single conditional `updateMany` guarded on the row's current status
   (e.g. `WHERE status = 'AVAILABLE'`), never a separate read followed by a

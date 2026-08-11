@@ -89,6 +89,7 @@ export default async function PublicEventPage({
             eventId={event.id}
             seatGroups={event.seatGroups}
             gapSeats={event.gapSeats}
+            seatLayout={event.venue.seatLayout}
           />
         </section>
       </div>

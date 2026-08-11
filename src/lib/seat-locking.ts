@@ -338,6 +338,180 @@ export async function cancelBooking(params: {
   }
 }
 
+// A request is the set of bookings created by one attendee request. All of
+// its members share the representative's referenceCode (ONLINE_CODE) or, for
+// PAY_AT_DOOR (no code), the identity tuple stamped by requestSeats — the same
+// key the admin bookings page groups by. The representative booking alone is
+// enough to resolve the group, so the admin UI passes a single bookingId and
+// confirm/cancel acts on every still-PENDING member atomically (mirroring the
+// per-booking guards: a seat that was taken in the meantime rolls back the
+// whole request).
+async function resolveBookingGroup(
+  tx: Prisma.TransactionClient,
+  bookingId: string,
+): Promise<{ where: Prisma.BookingWhereInput; eventId: string } | null> {
+  const rep = await tx.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      eventId: true,
+      userName: true,
+      userPhone: true,
+      caseType: true,
+      referenceCode: true,
+      expiresAt: true,
+    },
+  });
+  if (!rep) {
+    return null;
+  }
+  if (rep.referenceCode) {
+    return {
+      eventId: rep.eventId,
+      where: { eventId: rep.eventId, referenceCode: rep.referenceCode },
+    };
+  }
+  if (rep.expiresAt) {
+    return {
+      eventId: rep.eventId,
+      where: {
+        eventId: rep.eventId,
+        userName: rep.userName,
+        userPhone: rep.userPhone,
+        caseType: rep.caseType,
+        expiresAt: rep.expiresAt,
+      },
+    };
+  }
+  // No code and no expiry (e.g. an old GUEST booking): the group is just this
+  // booking.
+  return { eventId: rep.eventId, where: { id: bookingId } };
+}
+
+export async function confirmBookingGroup(params: {
+  bookingId: string;
+  adminId: string;
+}): Promise<ActionResult<{ count: number }>> {
+  const { bookingId, adminId } = params;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const group = await resolveBookingGroup(tx, bookingId);
+      if (!group) {
+        return { ok: false, error: 'Booking does not exist.' };
+      }
+
+      const pendingMembers = await tx.booking.findMany({
+        where: { ...group.where, status: BookingStatus.PENDING },
+        select: { id: true, eventSeatId: true },
+      });
+
+      if (pendingMembers.length === 0) {
+        return { ok: false, error: 'This request was already handled.' };
+      }
+
+      const bookingResult = await tx.booking.updateMany({
+        where: { id: { in: pendingMembers.map((member) => member.id) } },
+        data: {
+          status: BookingStatus.CONFIRMED,
+          confirmedByAdmin: adminId,
+          confirmedAt: new Date(),
+        },
+      });
+      if (bookingResult.count !== pendingMembers.length) {
+        throw new SeatUnavailableError('One or more bookings in this request were already handled');
+      }
+
+      const seatResult = await tx.eventSeat.updateMany({
+        where: {
+          id: { in: pendingMembers.map((member) => member.eventSeatId) },
+          eventId: group.eventId,
+          status: SeatStatus.PENDING,
+        },
+        data: {
+          status: SeatStatus.BOOKED,
+          pendingSince: null,
+          expiresAt: null,
+        },
+      });
+
+      if (seatResult.count !== pendingMembers.length) {
+        throw new SeatUnavailableError('One or more seats in this request are no longer pending');
+      }
+
+      return { ok: true, count: pendingMembers.length };
+    });
+  } catch (error) {
+    if (error instanceof SeatUnavailableError) {
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: false, error: 'Could not confirm this request.' };
+  }
+}
+
+export async function cancelBookingGroup(params: {
+  bookingId: string;
+}): Promise<ActionResult<{ count: number }>> {
+  const { bookingId } = params;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const group = await resolveBookingGroup(tx, bookingId);
+      if (!group) {
+        return { ok: false, error: 'Booking does not exist.' };
+      }
+
+      const pendingMembers = await tx.booking.findMany({
+        where: { ...group.where, status: BookingStatus.PENDING },
+        select: { id: true, eventSeatId: true },
+      });
+
+      if (pendingMembers.length === 0) {
+        return { ok: false, error: 'This request was already handled.' };
+      }
+
+      const bookingResult = await tx.booking.updateMany({
+        where: { id: { in: pendingMembers.map((member) => member.id) } },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+      });
+      if (bookingResult.count !== pendingMembers.length) {
+        throw new SeatUnavailableError('One or more bookings in this request were already handled');
+      }
+
+      const seatResult = await tx.eventSeat.updateMany({
+        where: {
+          id: { in: pendingMembers.map((member) => member.eventSeatId) },
+          eventId: group.eventId,
+          status: SeatStatus.PENDING,
+        },
+        data: {
+          status: SeatStatus.AVAILABLE,
+          bookedByName: null,
+          bookedByPhone: null,
+          referenceCode: null,
+          pendingSince: null,
+          expiresAt: null,
+        },
+      });
+
+      if (seatResult.count !== pendingMembers.length) {
+        throw new SeatUnavailableError('One or more seats in this request are no longer pending');
+      }
+
+      return { ok: true, count: pendingMembers.length };
+    });
+  } catch (error) {
+    if (error instanceof SeatUnavailableError) {
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: false, error: 'Could not cancel this request.' };
+  }
+}
+
 export async function createGuestBooking(params: {
   eventId: string;
   venueSeatIds: string[];

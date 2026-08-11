@@ -40,12 +40,18 @@ enum BookingStatus {
   EXPIRED
 }
 
+enum SeatLayout {
+  ODD_EVEN
+  IN_ORDER
+}
+
 model Venue {
-  id        String   @id @default(cuid())
-  name      String
-  address   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String     @id @default(cuid())
+  name        String
+  address     String
+  seatLayout  SeatLayout @default(ODD_EVEN)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   sections VenueSection[]
   seats    VenueSeat[]
