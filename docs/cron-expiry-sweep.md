@@ -113,6 +113,7 @@ in the commit/PR.
   with no Vercel plan requirement.
   **The `curl` call must fail the workflow on any failed sweep** — a green
   run that skipped the sweep is a silent failure. Use, for example:
+
   ```bash
   curl --fail-with-body \
        --max-time 30 \
@@ -120,6 +121,7 @@ in the commit/PR.
        -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
        https://<app-host>/api/cron/expire-pending
   ```
+
   — `--fail-with-body` (or `--fail`) makes non-`2xx` responses (401, 500,
   ...) exit non-zero so the step fails; `--max-time`/`--connect-timeout`
   bound a hung endpoint so the job cannot hang indefinitely. Then validate

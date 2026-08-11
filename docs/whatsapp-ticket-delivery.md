@@ -81,8 +81,11 @@ Admin "Resend" action -> sendTicketForBooking(bookingId)   [same pipeline]
   claimed and re-read, and encodes exactly that canonical token — a PDF is
   never built from a token that lost the race (that would yield a QR that
   fails verification).
-- **Send is outside any transaction**: the WhatsApp call cannot be made atomic
-  with the database. Sends run outside transactions, are keyed by a
+- **Send is outside any transaction, but the dispatch is not**: the WhatsApp
+  call cannot be made atomic with the database. The **intent** to send,
+  however, is persisted inside the confirmation transaction via a durable
+  outbox (`TicketSendJob`), so a crash between commit and dispatch never loses
+  a send attempt. Sends themselves run outside transactions, are keyed by a
   **delivery-attempt ID** (reused across retries of one attempt, regenerated
   for each intentional resend — see Task 3), and delivery fields are updated
   with a guarded write afterwards (Task 4).
@@ -147,10 +150,14 @@ Extend `src/lib/tickets.ts`:
   (`mintDeliveryUrl(reference, ttl)` — e.g. a signed/one-time URL).
   `mintDeliveryUrl` is the **sole** mechanism for reading or sharing the PDF
   — the object has no public read, so per-send expiry cannot be bypassed
-  through a directly fetchable URL. TTL default: cover the event
-  (`event.startsAt + 24h` margin), so the attendee's received link stays
-  valid at least through the event and an admin resend always gets a live
-  URL. Minting is gated by an **atomic status-conditional claim** (Task 4):
+  through a directly fetchable URL. TTL default: **cover the event with a
+  guaranteed positive floor** — `expiry = max(event.startsAt + 24h margin,
+  now + 24h)`. The event-based target keeps the attendee's received link
+  valid at least through the event, and the `now + 24h` floor guarantees the
+  URL is **never already expired at mint time**, even when a confirmed
+  booking is resent after the event has passed (line 150's naive
+  `event.startsAt + 24h` alone would mint an already-dead URL in that case,
+  breaking the resend promise of a live URL). Minting is gated by an **atomic status-conditional claim** (Task 4):
   `mintDeliveryUrl` is only ever called while the resend holds a
   compare-and-set claim requiring current status `CONFIRMED`, so a booking
   cancelled between a status read and minting cannot produce a URL. Revocation
@@ -188,9 +195,11 @@ Extend `src/lib/tickets.ts`:
   did not provide.
 - **Delivery-attempt identity, separate from resend identity**: a retry of
   one send attempt and an intentional resend must never share one key.
-  Persist a **delivery-attempt ID** per attempt (a new Booking column, e.g.
-  `ticketDeliveryAttemptId`): all retries of the **same** attempt reuse it;
-  each **intentional resend** generates a **new** attempt ID. `sendTicket`
+  Persist a **delivery-attempt ID** per attempt — carried on the auto-send
+  `TicketSendJob` outbox row (Task 4) and recorded on the Booking
+  (`ticketDeliveryAttemptId`, e.g.) by the resend claim: all retries of the
+  **same** attempt reuse it; each **intentional resend** generates a **new**
+  attempt ID. `sendTicket`
   takes the attempt ID — not the bare `bookingId` — so a retry is
   distinguishable from a deliberate second send, and the guarded write can
   stamp `ticketSentAt` for the right attempt. Callers check `ticketSentAt` is
@@ -251,11 +260,33 @@ Extend `src/lib/tickets.ts`:
 
 ## Task 4: Auto-send on confirm + resend
 
-- **Auto-send**: after `confirmBooking` succeeds, invoke the send pipeline
-  for that booking (and for each booking in a multi-seat group when the admin
-  confirms them). The pipeline runs **after** the confirm transaction commits
-  and is fully outside the request's confirmation path — the confirmation is
-  already committed and is never rolled back by a send failure.
+- **Auto-send via a durable outbox**: `confirmBooking` does **not** invoke the
+  send pipeline directly. Inside the same transaction that flips the booking
+  to `CONFIRMED` (and each booking in a multi-seat group), it also inserts a
+  **`TicketSendJob` outbox row** — `{ id, bookingId @unique, attemptId, status:
+  PENDING }` — where `attemptId` is the new delivery-attempt ID (Task 3). The
+  dispatch intent is now **atomic with the confirmation**: if the commit
+  succeeds, the outbox row exists; a process crash after commit but before the
+  pipeline starts cannot lose the send attempt — the row is simply still
+  `PENDING` and is claimed by a later dispatcher run. The pipeline itself runs
+  **after** the transaction commits and is fully outside the request's
+  confirmation path — the confirmation is already committed and is never
+  rolled back by a send failure.
+  - **Dispatcher**: after commit, a dispatcher claims `PENDING` rows with a
+    guarded compare-and-set write
+    (`updateMany({ where: { id, status: PENDING }, data: { status: PROCESSING } })`
+    — the same CAS shape as Tasks 1–3), then runs the send pipeline for the
+    claimed `bookingId`. On success it marks the row `DONE`; on terminal
+    failure it marks the row `FAILED` alongside the guarded `ticketNote` write
+    (manual resend covers it). The in-request confirm path may run the
+    dispatcher inline for immediacy; a worker/poll is the deployment that also
+    recovers missed dispatches.
+  - **Crash recovery**: a row stuck in `PROCESSING` (crash mid-pipeline) is
+    reset to `PENDING` by a recovery sweep once its `updatedAt` passes a stale
+    threshold, so it is retried instead of orphaned; a `PENDING` row never
+    needs a crash to survive — the next dispatcher run claims it. Recovery is
+    idempotent because the pipeline's own CAS writes (token, PDF reference,
+    send-record) make a re-run converge instead of duplicate.
   - **Bounded execution**: the pipeline runs under a hard deadline
     (`SEND_PIPELINE_DEADLINE_MS` — a deadline on the pipeline as a whole, with
     an exact default, max, and boot-time rejection per the Task 3 env rules)
@@ -268,13 +299,13 @@ Extend `src/lib/tickets.ts`:
   - **Catch everything**: timeouts, provider errors, and unexpected
     exceptions are all caught; none propagate to the admin request. Every
     failure persists `ticketNote` (trimmed, non-sensitive) via the guarded
-    write and leaves `ticketSentAt` null, which surfaces the "ticket not yet
-    sent" state in the UI.
-  - **Durable retry**: if automatic retrying of failed sends is required,
-    route sends through a **durable post-commit job** (queue/worker) instead
-    of in-request retries — in-request retries just re-open the timeout
-    problem. The in-request pipeline is fire-once + manual resend; the job is
-    an alternative deployment of the same pipeline.
+    write, leaves `ticketSentAt` null, and marks the outbox row `FAILED`,
+    which surfaces the "ticket not yet sent" state in the UI.
+  - **Retry policy**: the outbox **is** the durable retry mechanism — the
+    initial dispatch, and any automatic retry with backoff, is a `PENDING`
+    (or `RETRY`-with-`nextAttemptAt`) row. In-request retries just re-open the
+    timeout problem and are not used. Manual resend remains synchronous
+    (below) and does not depend on the outbox.
 - **Resend action**: a Server Action (guarded by the admin session, same
   pattern as `confirmBookingAction` in `src/lib/actions/bookings.ts`):
   - Zod-validates `bookingId`.
@@ -320,7 +351,7 @@ Extend `src/lib/tickets.ts`:
 
 - **Seat locking**: do not alter the guarded `updateMany` transitions in
   `src/lib/seat-locking.ts`; the confirm path is untouched except for the
-  post-commit send hook.
+  in-transaction `TicketSendJob` insert and the post-commit dispatch hook.
 - **Validation**: Zod for every mutation input (resend action).
 - **Errors**: typed results to the UI; never leak raw errors, stack traces,
   tokens, or phone numbers.
@@ -336,6 +367,14 @@ Extend `src/lib/tickets.ts`:
 
 - [ ] Confirming a booking auto-sends its ticket: `ticketToken` set and
       unique, `ticketPdfUrl` set, `ticketSentAt` set on provider acceptance
+- [ ] The initial auto-send is dispatched through a **durable outbox**: the
+      confirm transaction inserts a `TicketSendJob` (`PENDING`) row atomically
+      with the `CONFIRMED` write, so a crash between commit and dispatch does
+      not lose the send attempt — the row is claimed by a later dispatcher run
+- [ ] Dispatcher claims are compare-and-set (`PENDING → PROCESSING`), rows
+      stuck in `PROCESSING` past a stale threshold are recovered to `PENDING`,
+      and recovery is idempotent with the pipeline's CAS writes (no duplicate
+      token, PDF reference, or send-record)
 - [ ] `ticketSentAt` is recorded from the provider's **acceptance/queue**
       response (never labeled "delivered" in the UI); final delivery tracking
       is only added via status callbacks if a requirement demands it
@@ -356,6 +395,9 @@ Extend `src/lib/tickets.ts`:
 - [ ] `ticketPdfUrl` stores a stable **canonical reference** only — never a
       short-lived signed URL; delivery URLs are minted **fresh per send** with
       a TTL covering the event date
+- [ ] `mintDeliveryUrl` never returns an **already-expired** URL: TTL is
+      `max(event.startsAt + 24h margin, now + 24h)`, so a resend for a past
+      event still gets a live URL from mint time
 - [ ] The PDF object is **private**: its key is opaque and never contains
       `ticketToken`, it has no public read path, and `mintDeliveryUrl` is the
       sole mechanism that returns a readable URL
