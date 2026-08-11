@@ -157,7 +157,25 @@ Extend `src/lib/tickets.ts`:
   URL is **never already expired at mint time**, even when a confirmed
   booking is resent after the event has passed (line 150's naive
   `event.startsAt + 24h` alone would mint an already-dead URL in that case,
-  breaking the resend promise of a live URL). Minting is gated by an **atomic status-conditional claim** (Task 4):
+  breaking the resend promise of a live URL).
+  - **Provider max TTL — validated before sending**: the storage provider is
+    not yet chosen, so a signed-URL lifetime cap is **provider-specific and
+    fail-closed if unset** (`MAX_DELIVERY_URL_TTL`, e.g. 7 days for AWS S3 /
+    Cloudflare R2 presigned URLs — whatever the chosen provider documents as
+    its maximum). Effective TTL is
+    `ttl = min(max(event.startsAt + 24h margin, now + 24h), MAX_DELIVERY_URL_TTL)`.
+    The computed expiry is validated against the cap **before any send**.
+  - **Authenticated renewal**: a cap-clamped URL can lapse before a far-out
+    event, so the renewal path is itself authenticated minting — the admin
+    Resend action (admin session) or an attendee-initiated refresh on the
+    public booking status page (bearer: the booking's `referenceCode`). Each
+    renewal re-runs the atomic `CONFIRMED` claim, so only still-`CONFIRMED`
+    bookings can renew and a cancellation stops new URLs.
+  - **Fail closed**: if the required TTL exceeds `MAX_DELIVERY_URL_TTL` and
+    no renewal path is available, minting **fails closed** — a typed error is
+    recorded in `ticketNote` and nothing is sent, rather than sending a URL
+    that is dead before (or at) the event.
+  Minting is gated by an **atomic status-conditional claim** (Task 4):
   `mintDeliveryUrl` is only ever called while the resend holds a
   compare-and-set claim requiring current status `CONFIRMED`, so a booking
   cancelled between a status read and minting cannot produce a URL. Revocation
@@ -240,9 +258,10 @@ Extend `src/lib/tickets.ts`:
   requirement demands final-delivery confirmation.
 - Env vars (names only → `.env.example`): the chosen provider's creds plus
   `APP_BASE_URL` (to mint the absolute signed delivery URLs from the canonical
-  reference) and the two deadlines below. Parse via `src/lib/env.ts` with
-  fail-closed behavior — a missing provider credential makes sends fail
-  with a clear `ticketNote`, never a silent success.
+  reference), `MAX_DELIVERY_URL_TTL` (the storage provider's signed-URL cap —
+  fail closed if unset, per Task 2), and the two deadlines below. Parse via
+  `src/lib/env.ts` with fail-closed behavior — a missing provider credential
+  makes sends fail with a clear `ticketNote`, never a silent success.
   - **`SEND_TIMEOUT_MS`** — deadline for the **provider call alone**
     (`AbortSignal.timeout` or the provider client's equivalent). Exact
     default **`10000`**, allowed range **`1000`–`30000`**.
@@ -255,6 +274,10 @@ Extend `src/lib/tickets.ts`:
     (fail closed) if either deadline is outside its range or the pipeline
     deadline is ≤ the provider timeout — the app fails to boot rather than
     running with a timeout that could block a request or worker indefinitely.
+  - **`RECOVERY_STALE_MS`** — stale-`PROCESSING` recovery threshold (Task 4).
+    Default **`SEND_PIPELINE_DEADLINE_MS + 30000`**, and must be configured
+    **strictly greater than `SEND_PIPELINE_DEADLINE_MS`** so a live run is
+    never recovered while still under its deadline.
 - **Bounded provider call**: the transport must honor `SEND_TIMEOUT_MS` and
   reject on timeout; it must not hang the calling request (Task 4).
 
@@ -264,29 +287,47 @@ Extend `src/lib/tickets.ts`:
   send pipeline directly. Inside the same transaction that flips the booking
   to `CONFIRMED` (and each booking in a multi-seat group), it also inserts a
   **`TicketSendJob` outbox row** — `{ id, bookingId @unique, attemptId, status:
-  PENDING }` — where `attemptId` is the new delivery-attempt ID (Task 3). The
-  dispatch intent is now **atomic with the confirmation**: if the commit
-  succeeds, the outbox row exists; a process crash after commit but before the
-  pipeline starts cannot lose the send attempt — the row is simply still
-  `PENDING` and is claimed by a later dispatcher run. The pipeline itself runs
-  **after** the transaction commits and is fully outside the request's
-  confirmation path — the confirmation is already committed and is never
-  rolled back by a send failure.
-  - **Dispatcher**: after commit, a dispatcher claims `PENDING` rows with a
-    guarded compare-and-set write
-    (`updateMany({ where: { id, status: PENDING }, data: { status: PROCESSING } })`
-    — the same CAS shape as Tasks 1–3), then runs the send pipeline for the
-    claimed `bookingId`. On success it marks the row `DONE`; on terminal
-    failure it marks the row `FAILED` alongside the guarded `ticketNote` write
-    (manual resend covers it). The in-request confirm path may run the
-    dispatcher inline for immediacy; a worker/poll is the deployment that also
-    recovers missed dispatches.
+  PENDING, claimToken: null }` — where `attemptId` is the new delivery-attempt
+  ID (Task 3). The dispatch intent is now **atomic with the confirmation**: if
+  the commit succeeds, the outbox row exists; a process crash after commit but
+  before the pipeline starts cannot lose the send attempt — the row is simply
+  still `PENDING` and is claimed by a later worker. **The confirmation commits
+  the outbox and returns** — it never invokes or awaits the send pipeline, so
+  the admin request can never be held for `SEND_PIPELINE_DEADLINE_MS`. The
+  pipeline is fully outside the request's confirmation path; the confirmation
+  is already committed and is never rolled back by a send failure.
+  - **Dispatcher is a worker / post-commit queue only**: dispatch is performed
+    solely by the worker (or a queue consumer), never inline on the confirm
+    request. A worker claims `PENDING` rows with a guarded compare-and-set
+    write that also mints a per-claim **fencing token**:
+    (`updateMany({ where: { id, status: PENDING }, data: { status: PROCESSING,
+    claimToken: <randomUUID> } })` — affected `1` → this worker owns the claim
+    for this run; affected `0` → another worker already claimed it). The
+    worker then runs the send pipeline for the claimed `bookingId`. On success
+    it marks the row `DONE`; on terminal failure it marks the row `FAILED`
+    alongside the guarded `ticketNote` write (manual resend covers it).
+  - **Fenced completion — stale workers are rejected**: every completion write
+    (and every delivery-state write on the Booking) is fenced on the claim
+    token: `updateMany({ where: { id, status: PROCESSING, claimToken: <mine> },
+    data: { status: DONE | FAILED } })`. Affected `0` → a recovery sweep reset
+    this row and another worker reclaimed it, so **abort silently**: do not
+    mark the job and do not write Booking delivery state. The Booking's guarded
+    send-record write carries the same fence — a nullable
+    `ticketSendClaimToken` column conditioned in the `where`
+    (`{ id, ticketSentAt: null, ticketSendClaimToken: null }`) and stamped with
+    the claim token alongside `ticketSentAt`/`ticketNote` — so a superseded
+    worker can never overwrite a newer run's delivery state.
   - **Crash recovery**: a row stuck in `PROCESSING` (crash mid-pipeline) is
-    reset to `PENDING` by a recovery sweep once its `updatedAt` passes a stale
-    threshold, so it is retried instead of orphaned; a `PENDING` row never
-    needs a crash to survive — the next dispatcher run claims it. Recovery is
+    reset to `PENDING` (**and its `claimToken` cleared**) by a recovery sweep
+    once its `updatedAt` passes a stale threshold, so it is retried instead of
+    orphaned; a `PENDING` row never needs a crash to survive — the next worker
+    run claims it. The stale threshold is `RECOVERY_STALE_MS`, configured
+    **strictly greater than `SEND_PIPELINE_DEADLINE_MS`** (e.g. deadline + 30s)
+    so a legitimately in-flight run is never stolen while it still has time,
+    while a genuinely dead worker's row is recovered promptly. Recovery is
     idempotent because the pipeline's own CAS writes (token, PDF reference,
-    send-record) make a re-run converge instead of duplicate.
+    send-record) make a re-run converge instead of duplicate, and the fencing
+    token keeps the two workers' writes from clobbering each other.
   - **Bounded execution**: the pipeline runs under a hard deadline
     (`SEND_PIPELINE_DEADLINE_MS` — a deadline on the pipeline as a whole, with
     an exact default, max, and boot-time rejection per the Task 3 env rules)
@@ -370,11 +411,20 @@ Extend `src/lib/tickets.ts`:
 - [ ] The initial auto-send is dispatched through a **durable outbox**: the
       confirm transaction inserts a `TicketSendJob` (`PENDING`) row atomically
       with the `CONFIRMED` write, so a crash between commit and dispatch does
-      not lose the send attempt — the row is claimed by a later dispatcher run
-- [ ] Dispatcher claims are compare-and-set (`PENDING → PROCESSING`), rows
-      stuck in `PROCESSING` past a stale threshold are recovered to `PENDING`,
-      and recovery is idempotent with the pipeline's CAS writes (no duplicate
-      token, PDF reference, or send-record)
+      not lose the send attempt — the row is claimed by a later worker run
+- [ ] The confirmation **commits the outbox and returns**: it never invokes or
+      awaits the send pipeline, and no inline post-commit dispatch exists — an
+      admin request is never held for `SEND_PIPELINE_DEADLINE_MS`
+- [ ] Claims are compare-and-set (`PENDING → PROCESSING`) and mint a per-claim
+      **fencing token**; completion (`DONE`/`FAILED`) and Booking
+      delivery-state writes are fenced on that token, so a worker whose claim
+      was superseded by recovery **aborts silently** and cannot overwrite a
+      newer run's state
+- [ ] Rows stuck in `PROCESSING` past the **stale threshold** (which is
+      configured strictly greater than `SEND_PIPELINE_DEADLINE_MS`) are
+      recovered to `PENDING` with their `claimToken` cleared, and recovery is
+      idempotent with the pipeline's CAS writes (no duplicate token, PDF
+      reference, or send-record)
 - [ ] `ticketSentAt` is recorded from the provider's **acceptance/queue**
       response (never labeled "delivered" in the UI); final delivery tracking
       is only added via status callbacks if a requirement demands it
@@ -398,6 +448,14 @@ Extend `src/lib/tickets.ts`:
 - [ ] `mintDeliveryUrl` never returns an **already-expired** URL: TTL is
       `max(event.startsAt + 24h margin, now + 24h)`, so a resend for a past
       event still gets a live URL from mint time
+- [ ] The computed TTL is validated against the provider's signed-URL cap
+      (`MAX_DELIVERY_URL_TTL`, fail-closed if unset): effective
+      `ttl = min(max(...), cap)` and the expiry is checked **before any send**
+- [ ] A cap-clamped URL that would lapse before the event can be **renewed
+      via an authenticated path** (admin Resend or attendee refresh keyed by
+      `referenceCode`) that re-runs the atomic `CONFIRMED` claim; if renewal
+      is unavailable and the required TTL exceeds the cap, minting **fails
+      closed** — a typed error in `ticketNote`, nothing sent
 - [ ] The PDF object is **private**: its key is opaque and never contains
       `ticketToken`, it has no public read path, and `mintDeliveryUrl` is the
       sole mechanism that returns a readable URL
