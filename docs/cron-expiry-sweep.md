@@ -107,21 +107,48 @@ in the commit/PR.
   **an external scheduler** for the hourly sweep instead.
 - **GitHub Actions `schedule`** (deployment-agnostic, fits the repo's
   existing Actions usage): a workflow with
-  `on: schedule: [{ cron: '0 * * * *' }]` (and a `workflow_dispatch` for
-  manual runs) that calls the endpoint with `curl` and the `CRON_SECRET`
-  secret. Note Actions scheduled runs can be delayed by minutes — acceptable
-  here given the expiry windows are 3h/24h. Runs on the default GitHub-hosted
-  runner, with no Vercel plan requirement.
+  `on: schedule: [{ cron: '17 * * * *' }]` (plus a `workflow_dispatch`
+  trigger for manual runs and recovery) that calls the endpoint with `curl`
+  and the `CRON_SECRET` secret. Runs on the default GitHub-hosted runner,
+  with no Vercel plan requirement.
+  **The `curl` call must fail the workflow on any failed sweep** — a green
+  run that skipped the sweep is a silent failure. Use, for example:
+  ```bash
+  curl --fail-with-body \
+       --max-time 30 \
+       --connect-timeout 10 \
+       -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+       https://<app-host>/api/cron/expire-pending
+  ```
+  — `--fail-with-body` (or `--fail`) makes non-`2xx` responses (401, 500,
+  ...) exit non-zero so the step fails; `--max-time`/`--connect-timeout`
+  bound a hung endpoint so the job cannot hang indefinitely. Then validate
+  the expected successful body, e.g. pipe through
+  `jq -e '.ok == true and (.expired | type == "number")'` (or `grep -q
+  '"ok":true'`), so an unexpected/unparseable response also fails the step.
+  **Best-effort execution**: Actions scheduled runs are subject to delay and
+  can be **dropped** entirely under high platform load — most likely around
+  the start of the hour — with no notification. Mitigations used here:
+  - a **non-top-of-hour** minute (`17 * * * *`) to dodge the :00/:15/:30
+    contention peaks;
+  - a `workflow_dispatch` trigger so a missed run can be re-run manually;
+  - missed-run **monitoring** if a stale-hold bound matters (e.g. a "last
+    sweep succeeded" heartbeat checked from another channel).
+  Because runs are best-effort, treat the resulting expiry timing as an
+  approximation, not a guarantee; if a fixed bound is required, use the
+  **external scheduler** option below instead.
 - **External scheduler** (cron-job.org, AWS EventBridge, ...): a `POST` to
   the endpoint with the `CRON_SECRET` bearer token.
 
 Frequency: **hourly** is the recommended default (ONLINE_CODE holds expire
-after 3h, PAY_AT_DOOR after 24h, so an hourly sweep frees a hold within at
-most ~2h of its nominal expiry). Do not go more frequent than every 5
-minutes; the sweep is cheap but pointless to hammer. If a daily-only target
-(Vercel Hobby) is used, a daily sweep still caps how long a stale hold lingers
-at ~24h+3h/24h after its nominal expiry — correct, but noticeably slower than
-hourly.
+after 3h, PAY_AT_DOOR after 24h). With an hourly sweep, a stale hold is
+typically freed within an hour or two of its nominal expiry, but that is a
+**best-effort** bound — a scheduler may delay or drop a run (see the GitHub
+Actions note above), so no fixed maximum is promised. Do not go more frequent
+than every 5 minutes; the sweep is cheap but pointless to hammer. If a
+daily-only target (Vercel Hobby) is used, a daily sweep leaves a stale hold
+lingering up to roughly a day beyond its nominal expiry — correct, but
+noticeably slower than hourly.
 
 ### Task 3: Config
 
@@ -160,6 +187,9 @@ hourly.
       the sweep
 - [ ] A run with nothing past due is a no-op and returns `expired: 0` (cheap
       fast path)
+- [ ] If GitHub Actions is selected, a 401/500/hung/unparseable sweep call
+      **fails the workflow** (curl `--fail-with-body` + bounded timeouts +
+      response-body validation), so a missed sweep is never masked as green
 - [ ] `expired` in the response (and the log) is the guarded-update count:
       a booking confirmed/cancelled between the sweep's read and update is
       never counted as expired
