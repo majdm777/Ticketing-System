@@ -81,11 +81,14 @@ export function SeatMap({
       rows={rows}
       legend={[
         ...seatGroups.map((group) => ({
+          id: `section:${group.section}`,
           name: group.section,
           color: group.color,
           price: group.price,
         })),
-        ...(hasTakenSeats ? [{ name: 'Taken', color: '#e5e7eb' }] : []),
+        ...(hasTakenSeats
+          ? [{ id: 'taken', name: 'Taken', color: '#e5e7eb' }]
+          : []),
       ]}
     />
   );

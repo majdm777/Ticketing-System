@@ -42,6 +42,7 @@ export type SeatMapRow = {
 };
 
 export type SeatMapLegendItem = {
+  id: string;
   name: string;
   color: string;
   price?: number | null;
@@ -252,7 +253,7 @@ export function SeatMap({
         <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-200 pt-4">
           {legend.map((item) => (
             <div
-              key={item.name}
+              key={item.id}
               className="flex items-center gap-1.5 text-sm text-zinc-600"
             >
               <span

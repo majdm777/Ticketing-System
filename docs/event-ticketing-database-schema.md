@@ -228,3 +228,50 @@ code String @id // UNIQUE — reserved inside the request transaction before any
 
 createdAt DateTime @default(now())
 }
+
+---
+
+## Migration history (squashed)
+
+`prisma/migrations/` currently holds a **single** migration, `0_init`, which
+creates the whole schema in one step. It replaces the earlier 11-migration
+chain (init, booking integrity, venue ownership, venue sections, canceled
+statuses, USD prices, unique seat coordinates, seat gaps, shared reference
+codes, booking expiry index). The resulting schemas are identical: `0_init`
+was generated from the current `prisma/schema.prisma` and verified with
+`prisma migrate diff` (no drift).
+
+### New databases
+
+No special handling — `0_init` applies cleanly on an empty database:
+
+```sh
+prisma migrate deploy    # or `prisma migrate dev` in development
+```
+
+### Existing databases that already applied the old chain
+
+The old migration files are gone, but their rows stay in the database's
+`_prisma_migrations` table and the schema they produced is unchanged. To bring
+such an environment back in sync without a destructive reset:
+
+1. **Audit** which environments still carry the old chain
+   (`SELECT migration_name FROM _prisma_migrations;` should list the 11 old
+   names, not `0_init`).
+2. **Back up** the database first.
+3. **Baseline** — mark `0_init` as already applied (its output equals the old
+   chain's output, so nothing needs to run):
+
+   ```sh
+   prisma migrate resolve --applied 0_init
+   ```
+
+4. **Clean up** the stale rows: delete every `_prisma_migrations` row except
+   `0_init`, so `prisma migrate deploy` stops warning about applied-but-missing
+   files.
+5. **Deploy** — `prisma migrate deploy` finds nothing pending.
+
+> Do **not** apply `0_init` to an existing database without baselining it: its
+> `CREATE TABLE` statements fail because the tables already exist. If the
+> environment has no data worth keeping, `prisma migrate reset --force` is
+> simpler — it drops and recreates from `0_init`.

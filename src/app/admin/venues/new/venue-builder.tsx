@@ -553,6 +553,7 @@ export function VenueBuilder({
                 ? gPrice
                 : (sectionPrices[sectionName] ?? '');
             return {
+              id: `section:${sectionName}`,
               name: sectionName,
               color: colorMap.get(sectionName) ?? '#e5e7eb',
               price: validPrice(price),

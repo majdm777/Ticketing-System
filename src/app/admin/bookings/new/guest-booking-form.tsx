@@ -92,6 +92,7 @@ export function GuestBookingForm({
         <VenueSeatMap
           rows={rows}
           legend={sections.map((section) => ({
+            id: `section:${section.name}`,
             name: section.name,
             color: sectionColors.get(section.name) ?? '#e5e7eb',
             price: section.price,
