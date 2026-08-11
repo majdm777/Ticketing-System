@@ -10,12 +10,18 @@ import type { Booking } from '@prisma/client';
 //   - GUEST bookings (admin-created) have neither, so each is its own group.
 type GroupableBooking = Pick<
   Booking,
-  'eventId' | 'userName' | 'userPhone' | 'caseType' | 'referenceCode' | 'expiresAt'
+  'id' | 'eventId' | 'userName' | 'userPhone' | 'caseType' | 'referenceCode' | 'expiresAt'
 >;
 
 export function requestGroupKey(booking: GroupableBooking): string {
   if (booking.referenceCode) {
     return `ref:${booking.referenceCode}`;
+  }
+  // No code and no expiry (a GUEST booking): each is its own group, matching
+  // resolveBookingGroup in seat-locking.ts which treats that case as a single
+  // booking.
+  if (!booking.expiresAt) {
+    return `id:${booking.id}`;
   }
   return [
     'idn',
@@ -23,7 +29,7 @@ export function requestGroupKey(booking: GroupableBooking): string {
     booking.userName,
     booking.userPhone,
     booking.caseType,
-    booking.expiresAt?.toISOString() ?? '',
+    booking.expiresAt.toISOString(),
   ].join('|');
 }
 

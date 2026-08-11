@@ -410,7 +410,10 @@ export async function confirmBookingGroup(params: {
       }
 
       const bookingResult = await tx.booking.updateMany({
-        where: { id: { in: pendingMembers.map((member) => member.id) } },
+        where: {
+          id: { in: pendingMembers.map((member) => member.id) },
+          status: BookingStatus.PENDING,
+        },
         data: {
           status: BookingStatus.CONFIRMED,
           confirmedByAdmin: adminId,
@@ -471,7 +474,10 @@ export async function cancelBookingGroup(params: {
       }
 
       const bookingResult = await tx.booking.updateMany({
-        where: { id: { in: pendingMembers.map((member) => member.id) } },
+        where: {
+          id: { in: pendingMembers.map((member) => member.id) },
+          status: BookingStatus.PENDING,
+        },
         data: {
           status: BookingStatus.CANCELLED,
           cancelledAt: new Date(),

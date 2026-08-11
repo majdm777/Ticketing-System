@@ -189,7 +189,8 @@ export function SeatMap({
       rows.map((row) => {
         if (seatLayout === 'IN_ORDER') {
           const mirrored = [...row.seats].reverse();
-          return { row, split: splitIntoBlocks(mirrored), order: mirrored };
+          const split = splitIntoBlocks(mirrored);
+          return { row, split, order: split ? mirrored : row.seats };
         }
         return { row, split: splitLeftMiddleRight(row.seats), order: row.seats };
       }),
