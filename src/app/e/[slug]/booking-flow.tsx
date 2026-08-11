@@ -47,9 +47,11 @@ function CopyCodeButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   const resetTimer = useRef<number | undefined>(undefined);
+  const copyAttempt = useRef(0);
 
   useEffect(() => {
     return () => {
+      copyAttempt.current += 1;
       if (resetTimer.current !== undefined) {
         window.clearTimeout(resetTimer.current);
       }
@@ -57,14 +59,18 @@ function CopyCodeButton({ value }: { value: string }) {
   }, []);
 
   async function copy() {
+    const attempt = ++copyAttempt.current;
     try {
       await navigator.clipboard.writeText(value);
+      if (attempt !== copyAttempt.current) return;
       setFailed(false);
       setCopied(true);
     } catch {
+      if (attempt !== copyAttempt.current) return;
       setCopied(false);
       setFailed(true);
     }
+    if (attempt !== copyAttempt.current) return;
     if (resetTimer.current !== undefined) {
       window.clearTimeout(resetTimer.current);
     }

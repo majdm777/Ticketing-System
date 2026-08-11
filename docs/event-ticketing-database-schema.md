@@ -290,21 +290,30 @@ data:
 4. **Verify** — schema and data are untouched. Confirmed on a disposable copy
    of the old chain using Prisma 6.19.3:
 
-       prisma migrate status                 # "Database schema is up to date!"
-       prisma migrate deploy                 # "No pending migrations to apply."
+       prisma migrate status   # "Database schema is up to date!" (exit 0)
+       prisma migrate deploy   # "No pending migrations to apply." (exit 0)
        prisma migrate diff \
          --from-url "$DATABASE_URL" \
          --to-schema-datamodel prisma/schema.prisma   # "No difference detected."
 
-   `migrate status` reports up to date and `migrate deploy` still applies
-   future migrations normally despite the leftover rows (tested with a
-   throwaway post-chain migration). The Postgres `migrate diff` above needs a
-   shadow database; either grant the connection's user `CREATEDB` or pass
-   `--shadow-database-url`.
+   `migrate status` and `migrate deploy` exit 0 and stay silent about the
+   leftover rows, and `deploy` still applies future migrations normally
+   (tested with a throwaway post-chain migration) — so a CI job running
+   `migrate status`/`deploy` on such a database passes. Only `migrate dev`
+   flags the old rows. Comparing a live database against the schema
+   (`--from-url` + `--to-schema-datamodel`) needs no shadow database; a shadow
+   database is only required when diffing against a migrations directory
+   (`--from-migrations`/`--to-migrations`).
 5. **Rollback** — the baseline is a single `_prisma_migrations` insert and
-   changes no schema or data. If anything looks wrong, restore the backup from
-   step 2 and, if needed, `prisma migrate resolve --rolled-back 0_init` to
-   undo the baseline row.
+   changes no schema or data. To undo it, restore the backup from step 2
+   **together with** the matching pre-squash migration directory
+   (`git checkout 5f20037^ -- prisma/migrations`) so the database's migration
+   history and the checked-out files stay aligned. Restoring the database
+   alone is not a valid rollback: it drops the `0_init` row while the checkout
+   still contains `0_init`'s `CREATE TABLE` statements, so a later
+   `prisma migrate deploy` would try to create tables that already exist. And
+   `prisma migrate resolve --rolled-back 0_init` does not work either — it
+   errors with P3012 because `0_init` was applied, not failed.
 
 > `prisma migrate dev` is the exception: on a database that still carries the
 > old rows it reports them as "applied to the database but missing from the
