@@ -2,7 +2,7 @@
 
 import { SeatStatus } from '@prisma/client';
 import Link from 'next/link';
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   requestSeatStateAction,
@@ -46,6 +46,15 @@ function CheckIcon({ className }: { className: string }) {
 function CopyCodeButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
+  const resetTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current !== undefined) {
+        window.clearTimeout(resetTimer.current);
+      }
+    };
+  }, []);
 
   async function copy() {
     try {
@@ -56,7 +65,10 @@ function CopyCodeButton({ value }: { value: string }) {
       setCopied(false);
       setFailed(true);
     }
-    window.setTimeout(() => {
+    if (resetTimer.current !== undefined) {
+      window.clearTimeout(resetTimer.current);
+    }
+    resetTimer.current = window.setTimeout(() => {
       setCopied(false);
       setFailed(false);
     }, 2000);

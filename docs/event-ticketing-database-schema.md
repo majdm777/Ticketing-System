@@ -241,37 +241,76 @@ codes, booking expiry index). The resulting schemas are identical: `0_init`
 was generated from the current `prisma/schema.prisma` and verified with
 `prisma migrate diff` (no drift).
 
+**`0_init` recreates schema structure only — it does not replay the historical
+data backfills or custom data migrations from the removed chain.** The
+`prisma migrate diff` check above proves schema equivalence, not data
+equivalence. Anything those migrations wrote is not restored:
+
+- the `VenueSection` backfill for venues created before sections existed
+  (placeholder price `100` had to be fixed by hand);
+- the LBP→USD section-price conversion;
+- the `ReferenceCode` reservation backfill for codes already issued.
+
+A recreated environment (fresh database, or `migrate reset`) therefore starts
+empty. Rebuild the data it needs from the seed (see `prisma/seed.ts` and the
+`prisma.seed` command in `package.json`) or from a backup, then confirm
+section prices, since the old chain's placeholder values are not reapplied.
+
 ### New databases
 
 No special handling — `0_init` applies cleanly on an empty database:
 
-```sh
-prisma migrate deploy    # or `prisma migrate dev` in development
-```
+    prisma migrate deploy    # or `prisma migrate dev` in development
+
+After applying, run the seed to populate development data:
+
+    ALLOW_DESTRUCTIVE_SEED=true node prisma/seed.ts
 
 ### Existing databases that already applied the old chain
 
-The old migration files are gone, but their rows stay in the database's
-`_prisma_migrations` table and the schema they produced is unchanged. To bring
-such an environment back in sync without a destructive reset:
+A database that ran the old chain keeps all 11 rows in `_prisma_migrations`
+(after baselining, plus the `0_init` row) and its schema is unchanged, so
+nothing needs to re-run. Bring it onto the squashed history without touching
+data:
 
 1. **Audit** which environments still carry the old chain
    (`SELECT migration_name FROM _prisma_migrations;` should list the 11 old
    names, not `0_init`).
-2. **Back up** the database first.
-3. **Baseline** — mark `0_init` as already applied (its output equals the old
-   chain's output, so nothing needs to run):
+2. **Back up** the database first (e.g. `pg_dump`).
+3. **Baseline** — mark `0_init` as already applied. Its SQL equals the old
+   chain's net result, so nothing actually runs:
 
-   ```sh
-   prisma migrate resolve --applied 0_init
-   ```
+       prisma migrate resolve --applied 0_init
 
-4. **Clean up** the stale rows: delete every `_prisma_migrations` row except
-   `0_init`, so `prisma migrate deploy` stops warning about applied-but-missing
-   files.
-5. **Deploy** — `prisma migrate deploy` finds nothing pending.
+   This only inserts the `0_init` row. The 11 old rows stay put — that is the
+   documented outcome of the squash workflow, and rows must **not** be deleted
+   from `_prisma_migrations` by hand: Prisma has no supported cleanup command
+   for it and manual deletes can desynchronize the history.
 
-> Do **not** apply `0_init` to an existing database without baselining it: its
-> `CREATE TABLE` statements fail because the tables already exist. If the
-> environment has no data worth keeping, `prisma migrate reset --force` is
-> simpler — it drops and recreates from `0_init`.
+4. **Verify** — schema and data are untouched. Confirmed on a disposable copy
+   of the old chain using Prisma 6.19.3:
+
+       prisma migrate status                 # "Database schema is up to date!"
+       prisma migrate deploy                 # "No pending migrations to apply."
+       prisma migrate diff \
+         --from-url "$DATABASE_URL" \
+         --to-schema-datamodel prisma/schema.prisma   # "No difference detected."
+
+   `migrate status` reports up to date and `migrate deploy` still applies
+   future migrations normally despite the leftover rows (tested with a
+   throwaway post-chain migration). The Postgres `migrate diff` above needs a
+   shadow database; either grant the connection's user `CREATEDB` or pass
+   `--shadow-database-url`.
+5. **Rollback** — the baseline is a single `_prisma_migrations` insert and
+   changes no schema or data. If anything looks wrong, restore the backup from
+   step 2 and, if needed, `prisma migrate resolve --rolled-back 0_init` to
+   undo the baseline row.
+
+> `prisma migrate dev` is the exception: on a database that still carries the
+> old rows it reports them as "applied to the database but missing from the
+> local migrations directory" and proposes a reset. That is expected — the
+> interactive dev workflow is reset-based; use `deploy`-style workflows on that
+> database, or reset it. And do **not** apply `0_init`'s SQL to such a database
+> without baselining it first: its `CREATE TABLE` statements fail because the
+> tables already exist. If the environment has no data worth keeping,
+> `prisma migrate reset --force` is the simplest path in every case.
