@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { formatPrice } from '@/lib/currency';
 import { getEventsWithStats, type EventWithStats } from '@/lib/events';
 import { formatDate } from '@/lib/format';
+import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
 import { CopyLinkButton } from './copy-link-button';
 import { EventActions } from './event-actions';
@@ -23,6 +24,8 @@ type EventGroup = {
 };
 
 export default async function AdminEventsPage() {
+  await expirePastDuePendingBookings();
+
   const events = await getEventsWithStats();
 
   const groups: EventGroup[] = [

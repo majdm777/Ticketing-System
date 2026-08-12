@@ -613,13 +613,16 @@ export async function createGuestBooking(params: {
 // admin action and no background job. Pass `eventId` to limit the sweep to one
 // event. All transitions stay guarded (status = PENDING) and run in one
 // transaction, so a booking that was confirmed or cancelled in the meantime is
-// never touched.
+// never touched. The cutoff is captured once and re-checked on the writes, so
+// a seat that was re-held (PENDING again, with a future expiry) between the
+// read and the update is never freed.
 export async function expirePastDuePendingBookings(
   eventId?: string,
 ): Promise<number> {
+  const cutoff = new Date();
   const where = {
     status: BookingStatus.PENDING,
-    expiresAt: { lt: new Date() },
+    expiresAt: { lt: cutoff },
     ...(eventId ? { eventId } : {}),
   };
 
@@ -643,6 +646,7 @@ export async function expirePastDuePendingBookings(
       where: {
         id: { in: bookingIds },
         status: BookingStatus.PENDING,
+        expiresAt: { lt: cutoff },
       },
       data: { status: BookingStatus.EXPIRED },
     });
@@ -651,6 +655,7 @@ export async function expirePastDuePendingBookings(
       where: {
         id: { in: eventSeatIds },
         status: SeatStatus.PENDING,
+        expiresAt: { lt: cutoff },
         ...(eventId ? { eventId } : {}),
       },
       data: {

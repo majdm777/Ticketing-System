@@ -5,6 +5,8 @@ on:
     - cron: '17 * * * *'
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   sweep:
     runs-on: ubuntu-latest
@@ -13,6 +15,7 @@ jobs:
       - name: Run expiry sweep
         run: |
           response=$(curl --fail-with-body \
+            --request POST \
             --max-time 30 \
             --connect-timeout 10 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
