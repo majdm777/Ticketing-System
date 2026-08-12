@@ -1,0 +1,20 @@
+name: Expire pending holds
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run expiry sweep
+        run: |
+          response=$(curl --fail-with-body \
+            --max-time 30 \
+            --connect-timeout 10 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://ticketing-system-sepia-eta.vercel.app/api/cron/expire-pending")
+          echo "$response" | jq -e '.ok == true and (.expired | type == "number")'

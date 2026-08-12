@@ -639,7 +639,7 @@ export async function expirePastDuePendingBookings(
     const bookingIds = pastDueBookings.map((b) => b.id);
     const eventSeatIds = pastDueBookings.map((b) => b.eventSeatId);
 
-    await tx.booking.updateMany({
+    const bookingResult = await tx.booking.updateMany({
       where: {
         id: { in: bookingIds },
         status: BookingStatus.PENDING,
@@ -663,6 +663,6 @@ export async function expirePastDuePendingBookings(
       },
     });
 
-    return bookingIds.length;
+    return bookingResult.count;
   });
 }
