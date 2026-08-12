@@ -1,6 +1,7 @@
 import { BookingStatus, EventStatus, type CaseType } from '@prisma/client';
 
 import { prisma } from './prisma';
+import { expirePastDuePendingBookings } from './seat-locking';
 
 export type PublicBooking = {
   id: string;
@@ -33,8 +34,9 @@ export type PublicBookingLookup =
 // that were published and are now CLOSED/CANCELED/finished still render, since
 // attendees may be checking a booking on an event that has since ended. The
 // booking must belong to the event at [slug]; an unknown id or one belonging
-// to a different event is the same not_found. This is a pure read — no state
-// transitions.
+// to a different event is the same not_found. Runs the per-event expiry sweep
+// first so a past-due PENDING hold shows as EXPIRED here, matching what the
+// event page shows.
 export async function getPublicBooking({
   slug,
   bookingId,
@@ -50,6 +52,8 @@ export async function getPublicBooking({
   if (!event || event.status === EventStatus.DRAFT) {
     return { outcome: 'not_found' };
   }
+
+  await expirePastDuePendingBookings(event.id);
 
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, eventId: event.id },

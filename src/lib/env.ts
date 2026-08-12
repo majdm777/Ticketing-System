@@ -13,6 +13,7 @@ export const env = {
   adminPassword: readString('ADMIN_PASSWORD'),
   adminSessionSecret: readString('ADMIN_SESSION_SECRET'),
   ticketSecret: readString('TICKET_SECRET'),
+  cronSecret: readString('CRON_SECRET'),
   pendingOnlineExpiryHours: readPositiveNumber('PENDING_ONLINE_EXPIRY_HOURS', 3),
   pendingDoorExpiryHours: readPositiveNumber('PENDING_DOOR_EXPIRY_HOURS', 24),
 };
