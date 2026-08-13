@@ -72,7 +72,9 @@ confirmBooking / confirmBookingGroup succeeds
                   bookings stay CONFIRMED
 
 Admin "Send" / "Resend" action -> sendTicketsForRequest(referenceCode)
-Admin "Download" action        -> buildTicketPdf(bookings[]) only, no send
+Admin "Download" action        -> buildTicketPdf(bookings[]) only, no send;
+                                  only enabled for a confirmed group, so every
+                                  token is already persisted; never mutates state
 ```
 
 - **Grouping key: `referenceCode`.** A request with 2 seats produces 2
@@ -93,7 +95,10 @@ Admin "Download" action        -> buildTicketPdf(bookings[]) only, no send
 - **Download is a first-class action, not just a resend side effect.** The
   admin can pull the same PDF at any time after confirmation without
   triggering a WhatsApp send — same `buildTicketPdf` call, different action,
-  no state mutation, no `ticketSentAt` change.
+  no state mutation, no `ticketSentAt` change. Download is only offered once
+  the group is confirmed, which is exactly when all group tokens have been
+  persisted, so `buildTicketPdf` can assume a non-null `ticketToken` on every
+  booking and fails loudly (rather than omitting the QR) if one is missing.
 - **Send is inline, not queued.** The WhatsApp call happens synchronously as
   part of the same confirm request (or the same resend action) — no
   background worker, no outbox table, no claim states. If the process
@@ -169,25 +174,30 @@ Extend `src/lib/tickets.ts`:
   Implementation calls whichever provider is chosen (Twilio, Meta Cloud API,
   etc.) — confirm provider choice before implementing.
 - `src/lib/ticket-send.ts` → `sendTicketsForRequest(referenceCode)`:
-  1. Re-read every booking sharing `referenceCode`; if none has
-     `status === 'CONFIRMED'`, return a typed error, send nothing. (If some
-     but not all are `CONFIRMED` — e.g. a partial cancellation — send only
-     for the currently-`CONFIRMED` subset and note the rest were skipped.)
-  2. `ensureTicketToken` (Task 1) for each booking in the group.
-  3. `buildTicketPdf` (Task 2) across the whole group — one multi-page PDF.
-  4. Call `whatsapp.sendTicket(...)` once for the group, bounded by a single
+  1. Re-read every booking sharing `referenceCode` and reduce it to the
+     `CONFIRMED` subset. If the subset is empty, return a typed error, send
+     nothing. (If some but not all are `CONFIRMED` — e.g. a partial
+     cancellation — send only for the `CONFIRMED` subset and note the rest
+     were skipped.)
+  2. `ensureTicketToken` (Task 1) for each booking in the `CONFIRMED` subset.
+  3. `buildTicketPdf` (Task 2) across that same `CONFIRMED` subset only — one
+     multi-page PDF, one page per confirmed seat; cancelled bookings are never
+     rendered. The subset is the single source of truth for token creation,
+     PDF rendering, and seat-label generation.
+  4. Call `whatsapp.sendTicket(...)` once for the subset, bounded by a single
      timeout (`SEND_TIMEOUT_MS` env var, sane default e.g. 15s) so a hung
      provider call can't hold the request open indefinitely.
-  5. On success: guarded update on **every booking in the group** —
+  5. On success: guarded update on every booking in the subset —
      `ticketSentAt` set, `ticketNote` cleared, `WHERE id AND status =
      'CONFIRMED'` (so a booking cancelled mid-call doesn't record a phantom
      send).
-  6. On failure or timeout: guarded update on every booking in the group —
+  6. On failure or timeout: guarded update on every booking in the subset —
      `ticketNote` set to a short, non-sensitive failure reason. The
      confirmation itself is never rolled back.
 - `src/lib/ticket-pdf.ts`'s `buildTicketPdf` is also called directly (no
   send) by the admin's **Download** action — same grouping-by-`referenceCode`
-  lookup, same multi-page output, just streamed back instead of sent.
+  lookup, same `CONFIRMED`-only filtering and multi-page output, just streamed
+  back instead of sent.
 - Called automatically right after `confirmBooking` / `confirmBookingGroup`
   succeeds (same request, awaited — no background dispatch). Also callable
   directly from the admin's Resend action, identical function either way.

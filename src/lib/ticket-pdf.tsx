@@ -14,11 +14,13 @@ import { formatDate } from './format';
 
 // The slice of a Booking (with relations) that a ticket page renders. The send
 // pipeline and the admin Download action both load bookings in exactly this
-// shape and pass them here.
+// shape and pass them here. ticketToken is non-null by contract: every booking
+// has its token persisted (claim-or-adopt at confirmation) before a PDF can be
+// generated — a missing token fails loudly rather than silently dropping the QR.
 export type TicketBooking = {
   id: string;
   referenceCode: string | null;
-  ticketToken: string | null;
+  ticketToken: string;
   event: {
     name: string;
     startsAt: Date;
@@ -111,7 +113,7 @@ function compareSeats(a: TicketBooking, b: TicketBooking): number {
   return aSeat.number.localeCompare(bSeat.number, undefined, { numeric: true });
 }
 
-function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string | null }) {
+function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string }) {
   const seat = booking.eventSeat.venueSeat;
 
   return (
@@ -141,10 +143,12 @@ function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string | null
           <Text style={styles.value}>{booking.event.venue.address}</Text>
         </View>
       ) : null}
-      <View style={styles.row}>
-        <Text style={styles.label}>Price</Text>
-        <Text style={styles.value}>{formatUsd(seat.section?.price ?? 0)}</Text>
-      </View>
+      {seat.section ? (
+        <View style={styles.row}>
+          <Text style={styles.label}>Price</Text>
+          <Text style={styles.value}>{formatUsd(seat.section.price)}</Text>
+        </View>
+      ) : null}
       {booking.referenceCode ? (
         <View style={styles.row}>
           <Text style={styles.label}>Reference</Text>
@@ -152,13 +156,11 @@ function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string | null
         </View>
       ) : null}
 
-      {qr ? (
-        <View style={styles.qrWrap}>
-          {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <Image src={qr} style={{ width: 140, height: 140 }} />
-          <Text style={styles.qrHint}>Scan this code at the door</Text>
-        </View>
-      ) : null}
+      <View style={styles.qrWrap}>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <Image src={qr} style={{ width: 140, height: 140 }} />
+        <Text style={styles.qrHint}>Scan this code at the door</Text>
+      </View>
 
       <Text style={styles.footer}>Booking {booking.id}</Text>
     </Page>
@@ -174,9 +176,7 @@ export async function buildTicketPdf(bookings: TicketBooking[]): Promise<Buffer>
   const pages = await Promise.all(
     ordered.map(async (booking) => ({
       booking,
-      qr: booking.ticketToken
-        ? await QRCode.toDataURL(booking.ticketToken, { margin: 1, width: 256 })
-        : null,
+      qr: await QRCode.toDataURL(booking.ticketToken, { margin: 1, width: 256 }),
     })),
   );
 

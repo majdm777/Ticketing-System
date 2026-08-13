@@ -11,7 +11,8 @@ function readPositiveNumber(name: string, fallback: number) {
 
 function readStringOrUndefined(name: string): string | undefined {
   const value = process.env[name];
-  return value && value.trim() ? value : undefined;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export const env = {
