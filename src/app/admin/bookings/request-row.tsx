@@ -102,6 +102,7 @@ export function RequestRow({
           group={{
             representativeBookingId: group.representativeBookingId,
             allConfirmed: group.allConfirmed,
+            needsSend: group.needsSend,
             ticketSentAt: group.ticketSentAt,
             ticketNote: group.ticketNote,
           }}

@@ -218,6 +218,10 @@ export async function sendTicket(input: SendTicketInput): Promise<SendTicketResu
   }
 }
 
+function maskPhone(phone: string): string {
+  return `${phone.slice(0, 4)}***${phone.slice(-2)}`;
+}
+
 // Local stand-in for the Meta Cloud API (WHATSAPP_MOCK_MODE=true). Reuses the
 // real payload builders so the document-vs-template shape is exercised, but no
 // network request is made and no credentials are required.
@@ -228,7 +232,7 @@ function mockSendTicket(input: SendTicketInput, fail: boolean): SendTicketResult
 
   const record = {
     at: new Date().toISOString(),
-    phone: payload.to,
+    phone: maskPhone(payload.to),
     eventName: input.eventName,
     seatLabels: input.seatLabels,
     type: payload.type,

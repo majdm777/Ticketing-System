@@ -70,11 +70,12 @@ export async function GET(request: Request) {
     );
     const pdf = await buildTicketPdf(withTokens);
 
-    const filename = `tickets-${rep.referenceCode ?? rep.id}.pdf`;
+    const filename = `tickets-${(rep.referenceCode ?? rep.id).replace(/[^A-Za-z0-9._-]/g, '')}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store',
       },
     });
   } catch (error) {

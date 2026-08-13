@@ -98,6 +98,8 @@ const styles = StyleSheet.create({
     color: '#18181b',
     marginTop: 6,
     marginBottom: 8,
+    maxLines: 1,
+    textOverflow: 'ellipsis',
   },
   grid: {
     flex: 1,
@@ -125,6 +127,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 600,
     color: '#18181b',
+    maxLines: 1,
+    textOverflow: 'ellipsis',
   },
   perforation: {
     width: 16,

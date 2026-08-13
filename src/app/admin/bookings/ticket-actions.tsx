@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/format';
 export type TicketActionsGroup = {
   representativeBookingId: string;
   allConfirmed: boolean;
+  needsSend: boolean;
   ticketSentAt: Date | null;
   ticketNote: string | null;
 };
@@ -22,7 +23,7 @@ export function TicketActions({ group }: { group: TicketActionsGroup }) {
     sendTicketsStateAction,
     initialState,
   );
-  const label = group.ticketSentAt ? 'Resend' : 'Send';
+  const label = group.ticketSentAt && !group.needsSend ? 'Resend' : 'Send';
 
   return (
     <div className="space-y-2">

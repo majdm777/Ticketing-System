@@ -36,7 +36,14 @@ export function normalizePhoneNumber(raw: string): string | null {
     return null;
   }
 
-  const full = `${countryCode}${digits}`;
+  // A locally typed number often carries a national trunk prefix ("0"), which
+  // must be dropped before the country code is prepended.
+  const national = digits.replace(/^0+/, '');
+  if (!national) {
+    return null;
+  }
+
+  const full = `${countryCode}${national}`;
   return full.length >= 7 && full.length <= 15 ? `+${full}` : null;
 }
 
@@ -47,7 +54,7 @@ async function markSent(bookings: TicketBooking[]) {
   });
 }
 
-async function recordSendFailure(bookings: TicketBooking[], note: string) {
+async function recordSendFailure(bookings: Array<{ id: string }>, note: string) {
   await prisma.booking.updateMany({
     where: { id: { in: bookings.map((booking) => booking.id) }, status: BookingStatus.CONFIRMED },
     data: { ticketNote: note.slice(0, 200) },
@@ -93,6 +100,17 @@ export async function sendTicketsForRequest(params: {
       return { ok: false, error: 'No confirmed bookings to send tickets for.' };
     }
 
+    // Validate the phone before claiming tokens or rendering the PDF — an
+    // invalid number discards all of that work.
+    const phone = normalizePhoneNumber(rep.userPhone);
+    if (!phone) {
+      await recordSendFailure(
+        members,
+        'Phone number is not a valid WhatsApp number.',
+      );
+      return { ok: false, error: 'The attendee phone number is not a valid WhatsApp number.' };
+    }
+
     confirmed = await Promise.all(
       members.map(async (member) => ({
         ...member,
@@ -101,15 +119,6 @@ export async function sendTicketsForRequest(params: {
     );
 
     const pdf = await buildTicketPdf(confirmed);
-
-    const phone = normalizePhoneNumber(rep.userPhone);
-    if (!phone) {
-      await recordSendFailure(
-        confirmed,
-        'Phone number is not a valid WhatsApp number.',
-      );
-      return { ok: false, error: 'The attendee phone number is not a valid WhatsApp number.' };
-    }
 
     const result = await sendTicket({
       phone,

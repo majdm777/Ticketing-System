@@ -111,7 +111,7 @@ export default async function AdminBookingsPage({
         null,
       );
       const ticketNote =
-        members.find((member) => member.ticketNote !== null)?.ticketNote ?? null;
+        confirmedMembers.find((member) => member.ticketNote !== null)?.ticketNote ?? null;
       groups.push({
         key: requestGroupKey(rep),
         representativeBookingId: rep.id,

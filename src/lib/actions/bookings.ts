@@ -78,6 +78,8 @@ export async function confirmBookingAction(formData: FormData): Promise<BookingA
   });
 
   if (!result.ok) {
+    revalidatePath('/admin/bookings');
+    revalidatePath('/admin');
     return result;
   }
 
@@ -147,6 +149,8 @@ export async function confirmBookingGroupAction(
   });
 
   if (!result.ok) {
+    revalidatePath('/admin/bookings');
+    revalidatePath('/admin');
     return result;
   }
 
@@ -227,11 +231,13 @@ export async function createGuestBookingAction(
   }
 
   // A GUEST booking is one group per seat, so each confirmed booking gets its
-  // own ticket message. Sends are independent; surface the first failure.
-  const sendErrors = await Promise.all(
-    result.bookingIds.map((bookingId) => sendTicketsAfterConfirm(bookingId)),
-  );
-  const sendError = sendErrors.find((error) => error !== undefined);
+  // own ticket message. Send sequentially: each send renders a PDF and makes
+  // two Meta Cloud API calls, so batching them would pile up concurrent
+  // provider calls inside one admin request. Surface the first failure.
+  let sendError: string | undefined;
+  for (const bookingId of result.bookingIds) {
+    sendError ??= await sendTicketsAfterConfirm(bookingId);
+  }
 
   revalidatePath('/admin/bookings');
   revalidatePath('/admin/bookings/new');
