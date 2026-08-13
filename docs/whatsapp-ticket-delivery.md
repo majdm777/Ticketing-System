@@ -147,11 +147,15 @@ Extend `src/lib/tickets.ts`:
 
 ## Task 2: Ticket PDF (multi-page)
 
-- `src/lib/ticket-pdf.tsx` → `buildTicketPdf(bookings: Booking[])` returns a
+- `src/lib/ticket-pdf.tsx` → `buildTicketPdf(bookings: TicketBooking[])` returns a
   **single PDF buffer with one page per booking**, in a stable order (e.g.
   seat row/number ascending). Called with an array of length 1 for a
-  single-seat request — no special-casing needed.
-- Per-page content (all already available on `Booking` + relations): event
+  single-seat request — no special-casing needed. `TicketBooking` is the
+  exported input type: a `Booking` slice with relations where `ticketToken`
+  is **required** — every booking must have its token persisted (claim-or-
+  adopt at confirmation) before it can be rendered; a missing token throws.
+- Per-page content (all already available on the `TicketBooking` type):
+  event
   name, date/time, venue name + address, seat row/number, section name +
   price (once section pricing is finalized in the schema), the shared
   `referenceCode`, and **that seat's own** ticket token rendered as a QR
