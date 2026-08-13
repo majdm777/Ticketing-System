@@ -236,7 +236,8 @@ export async function createGuestBookingAction(
   // provider calls inside one admin request. Surface the first failure.
   let sendError: string | undefined;
   for (const bookingId of result.bookingIds) {
-    sendError ??= await sendTicketsAfterConfirm(bookingId);
+    const error = await sendTicketsAfterConfirm(bookingId);
+    sendError ??= error;
   }
 
   revalidatePath('/admin/bookings');

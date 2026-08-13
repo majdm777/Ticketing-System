@@ -31,6 +31,15 @@ export function normalizePhoneNumber(raw: string): string | null {
     return digits.length >= 7 && digits.length <= 15 ? `+${digits}` : null;
   }
 
+  // A "00" international prefix already carries the country code — the local
+  // default must not be prepended on top of it.
+  if (digits.startsWith('00')) {
+    const international = digits.slice(2);
+    return international.length >= 7 && international.length <= 15
+      ? `+${international}`
+      : null;
+  }
+
   const countryCode = env.whatsappDefaultCountryCode?.replace(/\D/g, '');
   if (!countryCode) {
     return null;
