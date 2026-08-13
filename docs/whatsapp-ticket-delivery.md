@@ -147,7 +147,7 @@ Extend `src/lib/tickets.ts`:
 
 ## Task 2: Ticket PDF (multi-page)
 
-- `src/lib/ticket-pdf.ts` → `buildTicketPdf(bookings: Booking[])` returns a
+- `src/lib/ticket-pdf.tsx` → `buildTicketPdf(bookings: Booking[])` returns a
   **single PDF buffer with one page per booking**, in a stable order (e.g.
   seat row/number ascending). Called with an array of length 1 for a
   single-seat request — no special-casing needed.
@@ -194,7 +194,7 @@ Extend `src/lib/tickets.ts`:
   6. On failure or timeout: guarded update on every booking in the subset —
      `ticketNote` set to a short, non-sensitive failure reason. The
      confirmation itself is never rolled back.
-- `src/lib/ticket-pdf.ts`'s `buildTicketPdf` is also called directly (no
+- `src/lib/ticket-pdf.tsx`'s `buildTicketPdf` is also called directly (no
   send) by the admin's **Download** action — same grouping-by-`referenceCode`
   lookup, same `CONFIRMED`-only filtering and multi-page output, just streamed
   back instead of sent.

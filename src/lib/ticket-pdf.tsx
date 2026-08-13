@@ -159,7 +159,7 @@ function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string }) {
       <View style={styles.qrWrap}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image src={qr} style={{ width: 140, height: 140 }} />
-        <Text style={styles.qrHint}>Scan this code at the door</Text>
+        <Text style={styles.qrHint}>Ticket QR code</Text>
       </View>
 
       <Text style={styles.footer}>Booking {booking.id}</Text>
