@@ -21,11 +21,30 @@ import {
   guestBookingSchema,
   publicRequestSchema,
 } from '@/lib/validation/bookings';
+import { sendTicketsForRequest } from '@/lib/ticket-send';
 
 export type BookingActionState = {
   ok: boolean;
   error?: string;
+  // Set when the action itself succeeded but the automatic WhatsApp ticket
+  // send (which runs after a confirm/guest create) did not. The confirmation
+  // is never rolled back; the failure is also recorded in each booking's
+  // ticketNote and shown on the row.
+  sendError?: string;
 };
+
+// Runs the ticket send after a confirmation has already committed. The send
+// outcome must never change the confirm result — a failure is surfaced to the
+// admin and recorded per-booking instead.
+async function sendTicketsAfterConfirm(bookingId: string): Promise<string | undefined> {
+  try {
+    const result = await sendTicketsForRequest({ bookingId });
+    return result.ok ? undefined : result.error;
+  } catch (error) {
+    console.error('Failed to send tickets after confirm', error);
+    return 'Tickets could not be sent.';
+  }
+}
 
 export type RequestSeatActionState =
   | {
@@ -58,9 +77,15 @@ export async function confirmBookingAction(formData: FormData): Promise<BookingA
     adminId: session.adminName,
   });
 
+  if (!result.ok) {
+    return result;
+  }
+
+  const sendError = await sendTicketsAfterConfirm(parsed.data.bookingId);
+
   revalidatePath('/admin/bookings');
   revalidatePath('/admin');
-  return result.ok ? { ok: true } : result;
+  return { ok: true, sendError };
 }
 
 export async function confirmBookingStateAction(
@@ -121,9 +146,15 @@ export async function confirmBookingGroupAction(
     adminId: session.adminName,
   });
 
+  if (!result.ok) {
+    return result;
+  }
+
+  const sendError = await sendTicketsAfterConfirm(parsed.data.bookingId);
+
   revalidatePath('/admin/bookings');
   revalidatePath('/admin');
-  return result.ok ? { ok: true } : result;
+  return { ok: true, sendError };
 }
 
 export async function confirmBookingGroupStateAction(
@@ -188,9 +219,49 @@ export async function createGuestBookingAction(
     adminId: session.adminName,
   });
 
+  if (!result.ok) {
+    revalidatePath('/admin/bookings');
+    revalidatePath('/admin/bookings/new');
+    revalidatePath('/admin');
+    return result;
+  }
+
+  // A GUEST booking is one group per seat, so each confirmed booking gets its
+  // own ticket message. Sends are independent; surface the first failure.
+  const sendErrors = await Promise.all(
+    result.bookingIds.map((bookingId) => sendTicketsAfterConfirm(bookingId)),
+  );
+  const sendError = sendErrors.find((error) => error !== undefined);
+
   revalidatePath('/admin/bookings');
   revalidatePath('/admin/bookings/new');
   revalidatePath('/admin');
+  return { ok: true, sendError };
+}
+
+// Admin "Send" / "Resend": re-runs the whole ticket pipeline for a group
+// (token claim-or-adopt, PDF, WhatsApp send) — identical to the automatic
+// send that follows a confirm, just triggered manually.
+export async function sendTicketsStateAction(
+  _previousState: BookingActionState,
+  formData: FormData,
+): Promise<BookingActionState> {
+  const session = await getAdminSession();
+  if (!session) {
+    return { ok: false, error: 'Unauthorized.' };
+  }
+
+  const parsed = bookingIdSchema.safeParse({
+    bookingId: formValue(formData, 'bookingId'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
+  }
+
+  const result = await sendTicketsForRequest({ bookingId: parsed.data.bookingId });
+
+  revalidatePath('/admin/bookings');
   return result.ok ? { ok: true } : result;
 }
 

@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/format';
 
 import { PendingBookingActions } from './pending-booking-actions';
 import { PendingRequestActions } from './pending-request-actions';
+import { TicketActions } from './ticket-actions';
 
 export type RequestSeatView = {
   bookingId: string;
@@ -25,6 +26,11 @@ export type RequestGroupView = {
   totalUsd: number;
   statusText: string;
   hasPending: boolean;
+  hasConfirmed: boolean;
+  allConfirmed: boolean;
+  needsSend: boolean;
+  ticketSentAt: Date | null;
+  ticketNote: string | null;
   confirmedByAdmin: string | null;
   confirmedAt: Date | null;
   seats: RequestSeatView[];
@@ -86,10 +92,25 @@ export function RequestRow({
 
   const seatCount = group.seats.length;
   const seatCountText = `${seatCount} seat${seatCount === 1 ? '' : 's'}`;
-  const actions = group.hasPending ? (
-    <PendingRequestActions bookingId={group.representativeBookingId} />
-  ) : (
-    <span className="text-sm text-zinc-500">No actions available.</span>
+  const actions = (
+    <div className="space-y-3">
+      {group.hasPending ? (
+        <PendingRequestActions bookingId={group.representativeBookingId} />
+      ) : null}
+      {group.hasConfirmed ? (
+        <TicketActions
+          group={{
+            representativeBookingId: group.representativeBookingId,
+            allConfirmed: group.allConfirmed,
+            ticketSentAt: group.ticketSentAt,
+            ticketNote: group.ticketNote,
+          }}
+        />
+      ) : null}
+      {!group.hasPending && !group.hasConfirmed ? (
+        <span className="text-sm text-zinc-500">No actions available.</span>
+      ) : null}
+    </div>
   );
   const detail = (
     <div className="space-y-3">

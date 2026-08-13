@@ -58,9 +58,10 @@ the source of truth if anything here turns out stale.
 
 ```text
 confirmBooking / confirmBookingGroup succeeds
-   └─> inline, same request: sendTicketsForRequest(referenceCode)
-         ├─ load all bookings sharing that referenceCode (1 for a single
-         |  seat, N for a multi-seat request)
+   └─> inline, same request: sendTicketsForRequest(bookingId)
+         ├─ resolve the request's group from the representative bookingId
+         |  (referenceCode / identity tuple / single booking), then reduce
+         |  it to the CONFIRMED subset (1 seat or N seats)
          ├─ ensureTicketToken(booking)  -> one signed token PER BOOKING,
          |   generated once, stored once, reused on every resend/download
          ├─ buildTicketPdf(bookings[])  -> ONE PDF, one page per booking/seat,
@@ -71,18 +72,21 @@ confirmBooking / confirmBookingGroup succeeds
                -> failure: ticketNote set on every booking in the group;
                   bookings stay CONFIRMED
 
-Admin "Send" / "Resend" action -> sendTicketsForRequest(referenceCode)
+Admin "Send" / "Resend" action -> sendTicketsForRequest(bookingId)
 Admin "Download" action        -> buildTicketPdf(bookings[]) only, no send;
                                   only enabled for a confirmed group, so every
                                   token is already persisted; never mutates state
 ```
 
-- **Grouping key: `referenceCode`.** A request with 2 seats produces 2
-  `Booking` rows sharing one `referenceCode`. The send/resend/download
-  pipeline operates on the **whole group**, not a single booking — this
-  replaces the earlier "each confirmed booking triggers its own send"
-  behavior. A single-seat request is just a group of size 1, so the same
-  code path handles both without a special case.
+- **Group key: resolved from a representative `bookingId`.** A request with 2
+  seats produces 2 `Booking` rows. The send/resend/download pipeline resolves
+  the group exactly like the confirm/cancel actions do (`bookingGroupWhere`):
+  ONLINE_CODE groups share one `referenceCode`, PAY_AT_DOOR groups share the
+  identity tuple + expiry, and a GUEST booking is a group of one. The pipeline
+  then operates on the **whole CONFIRMED subset**, not a single booking — this
+  replaces the earlier "each confirmed booking triggers its own send" behavior.
+  A single-seat request is just a group of size 1, so the same code path
+  handles both without a special case.
 - **Token, once, ever — per booking.** Each booking in the group still gets
   its own signed `ticketToken` (one per seat, reserved for future
   per-seat scanning), generated the first time the group is confirmed and
@@ -177,12 +181,13 @@ Extend `src/lib/tickets.ts`:
   ```
   Implementation calls whichever provider is chosen (Twilio, Meta Cloud API,
   etc.) — confirm provider choice before implementing.
-- `src/lib/ticket-send.ts` → `sendTicketsForRequest(referenceCode)`:
-  1. Re-read every booking sharing `referenceCode` and reduce it to the
-     `CONFIRMED` subset. If the subset is empty, return a typed error, send
-     nothing. (If some but not all are `CONFIRMED` — e.g. a partial
-     cancellation — send only for the `CONFIRMED` subset and note the rest
-     were skipped.)
+- `src/lib/ticket-send.ts` → `sendTicketsForRequest(bookingId)`:
+  1. Resolve the request's group from the representative `bookingId`
+     (`bookingGroupWhere`, the same resolution the confirm/cancel actions
+     use) and reduce it to the `CONFIRMED` subset. If the subset is empty,
+     return a typed error, send nothing. (If some but not all are
+     `CONFIRMED` — e.g. a partial cancellation — send only for the
+     `CONFIRMED` subset and note the rest were skipped.)
   2. `ensureTicketToken` (Task 1) for each booking in the `CONFIRMED` subset.
   3. `buildTicketPdf` (Task 2) across that same `CONFIRMED` subset only — one
      multi-page PDF, one page per confirmed seat; cancelled bookings are never
@@ -199,12 +204,15 @@ Extend `src/lib/tickets.ts`:
      `ticketNote` set to a short, non-sensitive failure reason. The
      confirmation itself is never rolled back.
 - `src/lib/ticket-pdf.tsx`'s `buildTicketPdf` is also called directly (no
-  send) by the admin's **Download** action — same grouping-by-`referenceCode`
-  lookup, same `CONFIRMED`-only filtering and multi-page output, just streamed
-  back instead of sent.
+  send) by the admin's **Download** action — same group resolution from a
+  `bookingId`, same `CONFIRMED`-only filtering and multi-page output, just
+  streamed back instead of sent.
 - Called automatically right after `confirmBooking` / `confirmBookingGroup`
   succeeds (same request, awaited — no background dispatch). Also callable
-  directly from the admin's Resend action, identical function either way.
+  directly from the admin's Send/Resend action, identical function either
+  way. A failed automatic send never changes the confirm result — it lands in
+  each booking's `ticketNote` and is surfaced on the confirm action as
+  `sendError`.
 - Phone numbers are validated/normalized before any send attempt; an
   unnormalizable number fails closed with a typed error, no send attempted.
 
@@ -230,8 +238,8 @@ Extend `src/lib/tickets.ts`:
 - **Seat locking**: this feature does not touch seat-locking transitions at
   all — it only runs after `confirmBooking`/`confirmBookingGroup` has
   already succeeded.
-- **Validation**: Zod on the resend/download action's input (a
-  `referenceCode`, not a raw booking ID, since the action is group-scoped).
+- **Validation**: Zod on the send/download action's input (a `bookingId`,
+  resolved server-side to the group, not a raw unvalidated string).
 - **Errors**: typed results to the UI; never leak raw errors, stack traces,
   tokens, or phone numbers.
 - **Secrets**: `TICKET_SECRET` and WhatsApp provider credentials are
