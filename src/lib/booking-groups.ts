@@ -7,7 +7,9 @@ import type { Booking } from '@prisma/client';
 //   - PAY_AT_DOOR requests have no code, but requestSeats stamps one shared
 //     expiresAt on the whole group, so the identity tuple distinguishes one
 //     request from a later request by the same attendee (expiry differs).
-//   - GUEST bookings (admin-created) have neither, so each is its own group.
+//   - GUEST bookings (admin-created) have neither, so the group is the
+//     attendee itself: every seat created for the same guest (same event,
+//     name, and phone) collapses into one request.
 type GroupableBooking = Pick<
   Booking,
   'id' | 'eventId' | 'userName' | 'userPhone' | 'caseType' | 'referenceCode' | 'expiresAt'
@@ -17,11 +19,17 @@ export function requestGroupKey(booking: GroupableBooking): string {
   if (booking.referenceCode) {
     return `ref:${booking.referenceCode}`;
   }
-  // No code and no expiry (a GUEST booking): each is its own group, matching
-  // resolveBookingGroup in seat-locking.ts which treats that case as a single
-  // booking.
+  // No code and no expiry (a GUEST booking): the admin creates all seats for
+  // one guest in a single batch, so the group is the attendee — same event,
+  // name, and phone. Mirrors bookingGroupWhere in seat-locking.ts.
   if (!booking.expiresAt) {
-    return `id:${booking.id}`;
+    return [
+      'guest',
+      booking.eventId,
+      booking.userName,
+      booking.userPhone,
+      booking.caseType,
+    ].join('|');
   }
   return [
     'idn',

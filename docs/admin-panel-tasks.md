@@ -149,8 +149,9 @@ first — they are the source of truth for the domain and schema.
    status filter (all/pending/confirmed/cancelled/expired). The per-seat rows
    are collapsed into **one row per request** (grouping key in
    `src/lib/booking-groups.ts`: `referenceCode` for ONLINE_CODE, else
-   `userName`/`userPhone`/`caseType`/`expiresAt` for PAY_AT_DOOR; GUEST rows
-   stay per-seat). Each request row shows `userName`, `userPhone`, `caseType`,
+   `userName`/`userPhone`/`caseType`/`expiresAt` for PAY_AT_DOOR, and
+   `userName`/`userPhone` for GUEST — every seat created for the same guest
+   collapses into one row). Each request row shows `userName`, `userPhone`, `caseType`,
    the shared `referenceCode` (so the admin can match it against the external
    payment note), the request's **total cost** (Σ of the seats' section
    prices), and a status breakdown (e.g. "2 PENDING / 1 CONFIRMED") when mixed.

@@ -365,8 +365,9 @@ export type BookingGroupResolution = {
 // booking's stamped fields — the single source of truth shared by the
 // confirm/cancel transactions here and by the ticket send/download pipeline.
 // referenceCode groups match every member; PAY_AT_DOOR groups (no code) share
-// the identity tuple + expiry; a GUEST booking (no code, no expiry) is its own
-// group.
+// the identity tuple + expiry; a GUEST booking (no code, no expiry) groups by
+// the attendee (event + name + phone), so a multi-seat guest booking collapses
+// into one request.
 export function bookingGroupWhere(rep: BookingGroupRep): BookingGroupResolution {
   if (rep.referenceCode) {
     return {
@@ -386,9 +387,17 @@ export function bookingGroupWhere(rep: BookingGroupRep): BookingGroupResolution 
       },
     };
   }
-  // No code and no expiry (e.g. a GUEST booking): the group is just this
-  // booking.
-  return { eventId: rep.eventId, where: { id: rep.id } };
+  // No code and no expiry (a GUEST booking): the group is the attendee — all
+  // seats created for the same guest (event + name + phone) in one request.
+  return {
+    eventId: rep.eventId,
+    where: {
+      eventId: rep.eventId,
+      userName: rep.userName,
+      userPhone: rep.userPhone,
+      caseType: rep.caseType,
+    },
+  };
 }
 
 async function resolveBookingGroup(

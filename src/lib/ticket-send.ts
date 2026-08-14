@@ -71,12 +71,13 @@ async function recordSendFailure(bookings: Array<{ id: string }>, note: string) 
 }
 
 // Sends one WhatsApp message per request (one PDF, one page per confirmed
-// seat), or per single seat for a GUEST booking. The group is resolved from a
-// representative bookingId exactly like the confirm/cancel actions, then
-// reduced to its CONFIRMED members: a partial cancellation never appears in a
-// sent ticket. Tokens are claim-or-adopted before rendering, and the outcome
-// is recorded on every confirmed booking via a guarded update — a send
-// failure never rolls back the confirmation.
+// seat). GUEST bookings group like any other request — all seats for the same
+// attendee (event + name + phone) ship together in one message. The group is
+// resolved from a representative bookingId exactly like the confirm/cancel
+// actions, then reduced to its CONFIRMED members: a partial cancellation never
+// appears in a sent ticket. Tokens are claim-or-adopted before rendering, and
+// the outcome is recorded on every confirmed booking via a guarded update — a
+// send failure never rolls back the confirmation.
 export async function sendTicketsForRequest(params: {
   bookingId: string;
 }): Promise<SendTicketsResult> {
