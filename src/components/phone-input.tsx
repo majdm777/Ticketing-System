@@ -1,5 +1,6 @@
 'use client';
 
+import { parsePhoneNumber, type CountryCode } from 'libphonenumber-js';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import {
@@ -8,6 +9,17 @@ import {
   getCountry,
   resolveDefaultCountryCode,
 } from '@/lib/countries';
+
+// Validates a full E.164 value against the selected country's numbering plan
+// so the attendee sees a field error for a wrong-length or impossible number
+// before submit (the server enforces the same check in phoneSchema).
+function isPhoneValid(value: string, isoCode: string): boolean {
+  try {
+    return parsePhoneNumber(value, isoCode as CountryCode).isValid();
+  } catch {
+    return false;
+  }
+}
 
 function ChevronIcon({ className }: { className: string }) {
   return (
@@ -53,7 +65,12 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
   const inputId = useId();
 
   const country = getCountry(countryCode) ?? COUNTRIES[0];
-  const fullNumber = `+${country.dial}${nationalNumber.replace(/\D/g, '')}`;
+  const nationalDigits = nationalNumber.replace(/\D/g, '');
+  const fullNumber = `+${country.dial}${nationalDigits}`;
+  const phoneError =
+    nationalNumber.trim() !== '' && !isPhoneValid(fullNumber, country.code)
+      ? `Enter a valid ${country.name} phone number.`
+      : null;
 
   // Focus the currently selected country when the list opens, and close on any
   // tap outside the control.
@@ -130,6 +147,8 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
             required
             value={nationalNumber}
             onChange={(event) => setNationalNumber(event.target.value)}
+            aria-invalid={phoneError ? true : undefined}
+            aria-describedby={phoneError ? `${inputId}-error` : undefined}
             className="min-w-0 flex-1 rounded-r-md border-0 bg-transparent py-3 pl-3 pr-3 text-base text-zinc-950 outline-none placeholder:text-zinc-400"
           />
         </div>
@@ -186,6 +205,12 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
           </ul>
         ) : null}
       </div>
+
+      {phoneError ? (
+        <p id={`${inputId}-error`} className="text-sm leading-5 text-red-700">
+          {phoneError}
+        </p>
+      ) : null}
 
       <p className="text-sm leading-5 text-zinc-500">
         We will send your ticket to this number by WhatsApp.

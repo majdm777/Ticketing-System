@@ -1,8 +1,11 @@
+import { parsePhoneNumber } from 'libphonenumber-js';
 import { z } from 'zod';
 
 export const bookingIdSchema = z.object({
   bookingId: z.string().trim().min(1, 'Booking is required.'),
 });
+
+const PHONE_ERROR = 'Enter a valid phone number (e.g. +15550123456).';
 
 // Phone numbers identify the attendee and are the target for WhatsApp ticket
 // delivery (docs/event-ticketing-flow.md), so require a real phone shape, not
@@ -17,15 +20,30 @@ export const phoneSchema = z
   .max(40)
   .superRefine((value, ctx) => {
     const digits = phoneDigits(value);
-    const valid =
+    const shapeValid =
       /^[+0-9(][0-9 ()+\-.]*$/.test(value) &&
       digits.length >= 7 &&
       digits.length <= 15;
-    if (!valid) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Enter a valid phone number (e.g. +15550123456).',
-      });
+    if (!shapeValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: PHONE_ERROR });
+      return;
+    }
+
+    // A leading `+` makes the number fully international (E.164): validate it
+    // against real numbering plans, not just a digit count — an invalid prefix
+    // or length must never be stored or reach the WhatsApp send. Local numbers
+    // (no `+`, e.g. from the admin guest form) carry no country context, so
+    // the shape check above is all they can be held to here.
+    if (value.startsWith('+')) {
+      let valid = false;
+      try {
+        valid = parsePhoneNumber(value).isValid();
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: PHONE_ERROR });
+      }
     }
   });
 

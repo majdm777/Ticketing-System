@@ -39,6 +39,7 @@ export const env = {
   whatsappApiVersion: readStringOrUndefined('WHATSAPP_API_VERSION') ?? 'v21.0',
   whatsappTemplateName: readStringOrUndefined('WHATSAPP_TEMPLATE_NAME'),
   whatsappDefaultCountryCode: readStringOrUndefined('WHATSAPP_DEFAULT_COUNTRY_CODE'),
+  whatsappDefaultCountry: readStringOrUndefined('WHATSAPP_DEFAULT_COUNTRY'),
   whatsappMockMode: devOnly && (readBoolean('WHATSAPP_MOCK_MODE') || whatsappMockFail),
   whatsappMockFail,
 };

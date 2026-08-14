@@ -243,17 +243,32 @@ export function flagEmoji(code: string): string {
   );
 }
 
-// Default selection for the attendee phone picker: the configured WhatsApp
-// default country code (digits, no `+`) when it matches a known country,
-// otherwise Lebanon (the app's primary market).
-export function resolveDefaultCountryCode(dial?: string): string {
-  const digits = dial?.replace(/\D/g, '');
-  if (digits) {
-    const match = COUNTRIES.find((country) => country.dial === digits);
+// Default selection for the attendee phone picker. An explicit ISO 3166-1
+// alpha-2 country code from configuration is preferred — it is unambiguous. A
+// dial code is only used when it identifies exactly one country: some codes
+// are shared (e.g. `1` across the whole NANP, `7` between Kazakhstan and
+// Russia), and guessing which country the attendee means from an ambiguous
+// code would permanently select the wrong default. Falls back to Lebanon (the
+// app's primary market).
+export function resolveDefaultCountryCode(
+  iso?: string,
+  dial?: string,
+): string {
+  if (iso) {
+    const match = getCountry(iso.trim().toUpperCase());
     if (match) {
       return match.code;
     }
   }
+
+  const digits = dial?.replace(/\D/g, '');
+  if (digits) {
+    const matches = COUNTRIES.filter((country) => country.dial === digits);
+    if (matches.length === 1) {
+      return matches[0].code;
+    }
+  }
+
   return 'LB';
 }
 

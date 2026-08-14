@@ -93,6 +93,7 @@ export default async function PublicEventPage({
             gapSeats={event.gapSeats}
             seatLayout={event.venue.seatLayout}
             defaultCountryCode={resolveDefaultCountryCode(
+              env.whatsappDefaultCountry,
               env.whatsappDefaultCountryCode,
             )}
           />
