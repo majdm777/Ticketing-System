@@ -15,6 +15,17 @@ function readStringOrUndefined(name: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function readBoolean(name: string) {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === 'true' || value === '1' || value === 'yes';
+}
+
+// Mock controls are dev-only tooling: deriving mode from either flag keeps the
+// WHATSAPP_MOCK_FAIL docs honest, and the NODE_ENV guard guarantees production
+// sends always reach the real provider.
+const devOnly = process.env.NODE_ENV !== 'production';
+const whatsappMockFail = devOnly && readBoolean('WHATSAPP_MOCK_FAIL');
+
 export const env = {
   adminPassword: readString('ADMIN_PASSWORD'),
   adminSessionSecret: readString('ADMIN_SESSION_SECRET'),
@@ -28,4 +39,6 @@ export const env = {
   whatsappApiVersion: readStringOrUndefined('WHATSAPP_API_VERSION') ?? 'v21.0',
   whatsappTemplateName: readStringOrUndefined('WHATSAPP_TEMPLATE_NAME'),
   whatsappDefaultCountryCode: readStringOrUndefined('WHATSAPP_DEFAULT_COUNTRY_CODE'),
+  whatsappMockMode: devOnly && (readBoolean('WHATSAPP_MOCK_MODE') || whatsappMockFail),
+  whatsappMockFail,
 };

@@ -91,6 +91,27 @@ export default async function AdminBookingsPage({
         .sort((a, b) => b[1] - a[1])
         .map(([status, count]) => `${count} ${status}`)
         .join(' / ');
+      const hasConfirmed = statusCounts.has(BookingStatus.CONFIRMED);
+      const allConfirmed =
+        members.length > 0 &&
+        members.every((member) => member.status === BookingStatus.CONFIRMED);
+      const needsSend = members.some(
+        (member) =>
+          member.status === BookingStatus.CONFIRMED &&
+          (member.ticketSentAt === null || member.ticketNote !== null),
+      );
+      const confirmedMembers = members.filter(
+        (member) => member.status === BookingStatus.CONFIRMED,
+      );
+      const ticketSentAt = confirmedMembers.reduce<Date | null>(
+        (latest, member) =>
+          member.ticketSentAt && (!latest || member.ticketSentAt > latest)
+            ? member.ticketSentAt
+            : latest,
+        null,
+      );
+      const ticketNote =
+        confirmedMembers.find((member) => member.ticketNote !== null)?.ticketNote ?? null;
       groups.push({
         key: requestGroupKey(rep),
         representativeBookingId: rep.id,
@@ -101,6 +122,11 @@ export default async function AdminBookingsPage({
         totalUsd,
         statusText,
         hasPending: statusCounts.has(BookingStatus.PENDING),
+        hasConfirmed,
+        allConfirmed,
+        needsSend,
+        ticketSentAt,
+        ticketNote,
         confirmedByAdmin: rep.confirmedByAdmin,
         confirmedAt: rep.confirmedAt,
         seats: members.map((member) => ({

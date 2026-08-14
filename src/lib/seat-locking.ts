@@ -346,24 +346,28 @@ export async function cancelBooking(params: {
 // confirm/cancel acts on every still-PENDING member atomically (mirroring the
 // per-booking guards: a seat that was taken in the meantime rolls back the
 // whole request).
-async function resolveBookingGroup(
-  tx: Prisma.TransactionClient,
-  bookingId: string,
-): Promise<{ where: Prisma.BookingWhereInput; eventId: string } | null> {
-  const rep = await tx.booking.findUnique({
-    where: { id: bookingId },
-    select: {
-      eventId: true,
-      userName: true,
-      userPhone: true,
-      caseType: true,
-      referenceCode: true,
-      expiresAt: true,
-    },
-  });
-  if (!rep) {
-    return null;
-  }
+export type BookingGroupRep = {
+  id: string;
+  eventId: string;
+  userName: string;
+  userPhone: string;
+  caseType: CaseType;
+  referenceCode: string | null;
+  expiresAt: Date | null;
+};
+
+export type BookingGroupResolution = {
+  eventId: string;
+  where: Prisma.BookingWhereInput;
+};
+
+// Pure derivation of a request's group WHERE clause from its representative
+// booking's stamped fields — the single source of truth shared by the
+// confirm/cancel transactions here and by the ticket send/download pipeline.
+// referenceCode groups match every member; PAY_AT_DOOR groups (no code) share
+// the identity tuple + expiry; a GUEST booking (no code, no expiry) is its own
+// group.
+export function bookingGroupWhere(rep: BookingGroupRep): BookingGroupResolution {
   if (rep.referenceCode) {
     return {
       eventId: rep.eventId,
@@ -382,9 +386,31 @@ async function resolveBookingGroup(
       },
     };
   }
-  // No code and no expiry (e.g. an old GUEST booking): the group is just this
+  // No code and no expiry (e.g. a GUEST booking): the group is just this
   // booking.
-  return { eventId: rep.eventId, where: { id: bookingId } };
+  return { eventId: rep.eventId, where: { id: rep.id } };
+}
+
+async function resolveBookingGroup(
+  tx: Prisma.TransactionClient,
+  bookingId: string,
+): Promise<BookingGroupResolution | null> {
+  const rep = await tx.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      id: true,
+      eventId: true,
+      userName: true,
+      userPhone: true,
+      caseType: true,
+      referenceCode: true,
+      expiresAt: true,
+    },
+  });
+  if (!rep) {
+    return null;
+  }
+  return bookingGroupWhere(rep);
 }
 
 export async function confirmBookingGroup(params: {
