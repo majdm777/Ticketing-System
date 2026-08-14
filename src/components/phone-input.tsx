@@ -1,6 +1,6 @@
 'use client';
 
-import { parsePhoneNumber, type CountryCode } from 'libphonenumber-js';
+import { parsePhoneNumber, type CountryCode } from 'libphonenumber-js/max';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import {
@@ -10,12 +10,17 @@ import {
   resolveDefaultCountryCode,
 } from '@/lib/countries';
 
-// Validates a full E.164 value against the selected country's numbering plan
-// so the attendee sees a field error for a wrong-length or impossible number
-// before submit (the server enforces the same check in phoneSchema).
+// Validates the composed E.164 value against the selected country's numbering
+// plan before submit (the server enforces the same checks in phoneSchema).
+// `fullNumber` always starts with `+`, so libphonenumber derives the country
+// from the digits, not the defaultCountry argument — pin the parsed country to
+// the one the attendee selected, otherwise a US number would pass validation
+// while Canada (or any other +1 country) is selected. The `max` metadata set
+// enforces digit patterns, not just lengths.
 function isPhoneValid(value: string, isoCode: string): boolean {
   try {
-    return parsePhoneNumber(value, isoCode as CountryCode).isValid();
+    const parsed = parsePhoneNumber(value, isoCode as CountryCode);
+    return parsed.isValid() && parsed.country === isoCode;
   } catch {
     return false;
   }
@@ -56,6 +61,7 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = COUNTRIES.findIndex(
     (country) => country.code === countryCode,
@@ -71,6 +77,13 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
     nationalNumber.trim() !== '' && !isPhoneValid(fullNumber, country.code)
       ? `Enter a valid ${country.name} phone number.`
       : null;
+
+  // Reflect the computed phone error into native constraint validation so the
+  // browser blocks submit for a non-empty invalid number, not just for an empty
+  // one (the server enforces the same checks in phoneSchema).
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(phoneError ?? '');
+  }, [phoneError]);
 
   // Focus the currently selected country when the list opens, and close on any
   // tap outside the control.
@@ -138,6 +151,7 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
           />
 
           <input
+            ref={inputRef}
             id={inputId}
             name="userPhoneNational"
             type="tel"

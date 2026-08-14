@@ -1,4 +1,4 @@
-import { parsePhoneNumber } from 'libphonenumber-js';
+import { parsePhoneNumber } from 'libphonenumber-js/max';
 import { z } from 'zod';
 
 export const bookingIdSchema = z.object({
@@ -31,9 +31,11 @@ export const phoneSchema = z
 
     // A leading `+` makes the number fully international (E.164): validate it
     // against real numbering plans, not just a digit count — an invalid prefix
-    // or length must never be stored or reach the WhatsApp send. Local numbers
-    // (no `+`, e.g. from the admin guest form) carry no country context, so
-    // the shape check above is all they can be held to here.
+    // or digit pattern must never be stored or reach the WhatsApp send. The
+    // `max` metadata set rejects numbers that match a plausible length but an
+    // impossible digit pattern. Local numbers (no `+`, e.g. from the admin
+    // guest form) carry no country context, so the shape check above is all
+    // they can be held to here.
     if (value.startsWith('+')) {
       let valid = false;
       try {
