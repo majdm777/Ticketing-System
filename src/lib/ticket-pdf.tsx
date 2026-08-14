@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
   Document,
   Image,
@@ -73,6 +76,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  logo: {
+    height: 40,
+    width: 50,
+    objectFit: 'contain',
+    marginRight: 8,
   },
   badge: {
     borderRadius: 999,
@@ -212,6 +221,19 @@ function seatLabel(booking: TicketBooking): string {
   return `${seat.section?.name ?? ''} ${seat.row}${seat.number}`.trim();
 }
 
+// Optional organizer logo: read once per PDF from public/logo.png and inlined
+// as a base64 data URI so the render needs no network fetch. A missing file
+// returns null and the page simply omits the logo — no placeholder box, no
+// broken image.
+function loadTicketLogo(): string | null {
+  try {
+    const buffer = readFileSync(join(process.cwd(), 'public', 'logo.png'));
+    return `data:image/png;base64,${buffer.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
 // Stable page order across sends, resends and downloads: seat row, then seat
 // number, both compared numerically so "A10" sorts after "A2".
 function compareSeats(a: TicketBooking, b: TicketBooking): number {
@@ -254,7 +276,7 @@ function Perforation() {
   );
 }
 
-function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string }) {
+function TicketPage({ booking, qr, logo }: { booking: TicketBooking; qr: string; logo: string | null }) {
   const seat = booking.eventSeat.venueSeat;
   const venue = booking.event.venue;
   const address = venue.address || '-';
@@ -264,6 +286,10 @@ function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string }) {
     <Page size={[900, 300]} style={styles.page}>
       <View style={styles.body}>
         <View style={styles.headerRow}>
+          {logo ? (
+            /* eslint-disable-next-line jsx-a11y/alt-text */
+            <Image src={logo} style={styles.logo} />
+          ) : null}
           <StatusBadge caseType={booking.caseType} />
           <Text style={styles.kicker}>Admission ticket</Text>
         </View>
@@ -314,6 +340,7 @@ function TicketPage({ booking, qr }: { booking: TicketBooking; qr: string }) {
 // each seat's own signed ticket token, then renders and returns the PDF buffer.
 export async function buildTicketPdf(bookings: TicketBooking[]): Promise<Buffer> {
   const ordered = [...bookings].sort(compareSeats);
+  const logo = loadTicketLogo();
 
   const pages = await Promise.all(
     ordered.map(async (booking) => ({
@@ -325,7 +352,7 @@ export async function buildTicketPdf(bookings: TicketBooking[]): Promise<Buffer>
   const document = (
     <Document>
       {pages.map(({ booking, qr }) => (
-        <TicketPage key={booking.id} booking={booking} qr={qr} />
+        <TicketPage key={booking.id} booking={booking} qr={qr} logo={logo} />
       ))}
     </Document>
   );
