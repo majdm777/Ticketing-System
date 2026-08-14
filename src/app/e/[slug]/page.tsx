@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
 
+import { resolveDefaultCountryCode } from '@/lib/countries';
+import { env } from '@/lib/env';
 import { formatDate } from '@/lib/format';
 import { getPublicEventBySlug } from '@/lib/public-events';
 
@@ -90,6 +92,10 @@ export default async function PublicEventPage({
             seatGroups={event.seatGroups}
             gapSeats={event.gapSeats}
             seatLayout={event.venue.seatLayout}
+            defaultCountryCode={resolveDefaultCountryCode(
+              env.whatsappDefaultCountry,
+              env.whatsappDefaultCountryCode,
+            )}
           />
         </section>
       </div>

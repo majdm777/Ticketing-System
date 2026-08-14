@@ -8,6 +8,7 @@ import {
   requestSeatStateAction,
   type RequestSeatActionState,
 } from '@/lib/actions/bookings';
+import { PhoneInput } from '@/components/phone-input';
 import { formatUsd } from '@/lib/currency';
 import type { PublicGapSeat, PublicSeatGroup } from '@/lib/public-events';
 import { MAX_PUBLIC_BOOKING_SEATS } from '@/lib/validation/bookings';
@@ -147,16 +148,17 @@ export function BookingFlow({
   seatGroups,
   gapSeats,
   seatLayout,
+  defaultCountryCode,
 }: {
   slug: string;
   eventId: string;
   seatGroups: PublicSeatGroup[];
   gapSeats: PublicGapSeat[];
   seatLayout: 'ODD_EVEN' | 'IN_ORDER';
+  defaultCountryCode: string;
 }) {
   const [selection, setSelection] = useState<Set<string>>(() => new Set());
   const [userName, setUserName] = useState('');
-  const [userPhone, setUserPhone] = useState('');
   const [state, formAction, pending] = useActionState(
     requestSeatStateAction,
     initialRequestState,
@@ -423,21 +425,7 @@ export function BookingFlow({
               />
             </label>
 
-            <label className="block space-y-1">
-              <span className="text-base font-medium text-zinc-950">
-                Your phone number
-              </span>
-              <input
-                name="userPhone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                required
-                value={userPhone}
-                onChange={(event) => setUserPhone(event.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-3 text-base text-zinc-950 outline-none focus:border-zinc-950"
-              />
-            </label>
+            <PhoneInput defaultCountryCode={defaultCountryCode} />
           </div>
 
           {state.ok === false && state.error ? (
