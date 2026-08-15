@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useState } from 'react';
 
+import { PhoneInput } from '@/components/phone-input';
 import {
   SeatMap as VenueSeatMap,
   type SeatMapRow,
@@ -24,11 +25,13 @@ export function GuestBookingForm({
   seats,
   sections,
   seatLayout = 'ODD_EVEN',
+  defaultCountryCode,
 }: {
   eventId: string;
   seats: SeatMapDataInput[];
   sections: Section[];
   seatLayout?: 'ODD_EVEN' | 'IN_ORDER';
+  defaultCountryCode: string;
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<Set<string>>(new Set());
   const [state, formAction, pending] = useActionState(createGuestBookingAction, initialState);
@@ -134,15 +137,11 @@ export function GuestBookingForm({
           />
         </label>
 
-        <label className="block space-y-2 text-sm font-medium">
-          <span>Phone</span>
-          <input
-            name="userPhone"
-            type="tel"
-            autoComplete="tel"
-            className="w-full rounded-md border border-zinc-300 px-3 py-3 text-base outline-none focus:border-zinc-950"
-          />
-        </label>
+        <PhoneInput
+          label="Guest phone"
+          placeholder="Guest phone number"
+          defaultCountryCode={defaultCountryCode}
+        />
 
         {state.error ? (
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
