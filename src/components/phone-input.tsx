@@ -50,7 +50,15 @@ function ChevronIcon({ className }: { className: string }) {
 // and the local phone number. The submitted value is always full E.164
 // (`+<dial><digits>`) in a hidden `userPhone` input, so the existing server
 // action and validation keep working unchanged.
-export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string }) {
+export function PhoneInput({
+  defaultCountryCode,
+  label = 'Your phone number',
+  placeholder = 'Your phone number',
+}: {
+  defaultCountryCode: string;
+  label?: string;
+  placeholder?: string;
+}) {
   const [countryCode, setCountryCode] = useState(() =>
     getCountry(defaultCountryCode)
       ? defaultCountryCode
@@ -120,7 +128,7 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
         htmlFor={inputId}
         className="block text-base font-medium text-zinc-950"
       >
-        Your phone number
+        {label}
       </label>
 
       <div ref={rootRef} className="relative">
@@ -157,7 +165,7 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
             type="tel"
             inputMode="tel"
             autoComplete="tel-national"
-            placeholder="Your phone number"
+            placeholder={placeholder}
             required
             value={nationalNumber}
             onChange={(event) => setNationalNumber(event.target.value)}
@@ -225,10 +233,6 @@ export function PhoneInput({ defaultCountryCode }: { defaultCountryCode: string 
           {phoneError}
         </p>
       ) : null}
-
-      <p className="text-sm leading-5 text-zinc-500">
-        We will send your ticket to this number by WhatsApp.
-      </p>
     </div>
   );
 }

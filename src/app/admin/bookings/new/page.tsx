@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { EventStatus } from '@prisma/client';
 
+import { resolveDefaultCountryCode } from '@/lib/countries';
+import { env } from '@/lib/env';
 import { prisma } from '@/lib/prisma';
 import { expirePastDuePendingBookings } from '@/lib/seat-locking';
 
@@ -87,6 +89,10 @@ export default async function NewGuestBookingPage({
               seats={flatSeats}
               sections={sections}
               seatLayout={event.venue.seatLayout}
+              defaultCountryCode={resolveDefaultCountryCode(
+                env.whatsappDefaultCountry,
+                env.whatsappDefaultCountryCode,
+              )}
             />
           </>
         ) : (
