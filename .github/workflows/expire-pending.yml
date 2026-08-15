@@ -13,11 +13,13 @@ jobs:
 
     steps:
       - name: Run expiry sweep
+        env:
+          APP_URL: ${{ vars.APP_URL }}
         run: |
           response=$(curl --fail-with-body \
             --request POST \
             --max-time 30 \
             --connect-timeout 10 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://ticketing-system-sepia-eta.vercel.app/api/cron/expire-pending")
+            "https://$APP_URL/api/cron/expire-pending")
           echo "$response" | jq -e '.ok == true and (.expired | type == "number")'

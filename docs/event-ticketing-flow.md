@@ -171,7 +171,9 @@ Venue
   pages collapse a request back into one row. The grouping key is the
   request's shared identity — `referenceCode` for ONLINE_CODE requests, or the
   `userName`/`userPhone`/`caseType`/`expiresAt` tuple stamped by `requestSeats`
-  for PAY_AT_DOOR (GUEST bookings, created `CONFIRMED`, stay one row per seat).
+  for PAY_AT_DOOR. GUEST bookings (created `CONFIRMED`, no code, no expiry)
+  group by the attendee itself — every seat created for the same guest (same
+  event, name, and phone) collapses into one request row.
   Each request row shows its seats, the total cost the attendee owes (Σ of the
   seats' section prices), and one Confirm/Cancel that acts on the **whole
   request** in a single guarded transaction (`confirmBookingGroup` /

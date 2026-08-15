@@ -82,7 +82,8 @@ Admin "Download" action        -> buildTicketPdf(bookings[]) only, no send;
   seats produces 2 `Booking` rows. The send/resend/download pipeline resolves
   the group exactly like the confirm/cancel actions do (`bookingGroupWhere`):
   ONLINE_CODE groups share one `referenceCode`, PAY_AT_DOOR groups share the
-  identity tuple + expiry, and a GUEST booking is a group of one. The pipeline
+  identity tuple + expiry, and GUEST groups share the attendee (event + name +
+  phone). The pipeline
   then operates on the **whole CONFIRMED subset**, not a single booking — this
   replaces the earlier "each confirmed booking triggers its own send" behavior.
   A single-seat request is just a group of size 1, so the same code path
