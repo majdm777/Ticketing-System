@@ -1,17 +1,15 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
+import { ConfirmationDialog } from '@/components/confirmation-dialog';
 import { deleteVenueAction } from '@/lib/actions/venues';
 
 export function VenueDeleteButton({ venueId, venueName }: { venueId: string; venueName: string }) {
   const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
 
   function handleDelete() {
-    if (!confirm(`Delete "${venueName}"? This can't be undone.`)) {
-      return;
-    }
-
     const formData = new FormData();
     formData.set('venueId', venueId);
 
@@ -24,13 +22,23 @@ export function VenueDeleteButton({ venueId, venueName }: { venueId: string; ven
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleDelete}
-      disabled={isPending}
-      className="inline-block border border-gray-300 px-4 py-2 rounded-md font-medium text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-    >
-      {isPending ? 'Deleting...' : 'Delete'}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={isPending}
+        className="inline-block border border-gray-300 px-4 py-2 rounded-md font-medium text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+      >
+        {isPending ? 'Deleting...' : 'Delete'}
+      </button>
+      <ConfirmationDialog
+        open={open}
+        title="Delete venue"
+        message={`Delete "${venueName}"? This cannot be undone.`}
+        confirmLabel={isPending ? 'Deleting...' : 'Delete'}
+        onConfirm={() => { setOpen(false); handleDelete(); }}
+        onCancel={() => setOpen(false)}
+      />
+    </>
   );
 }

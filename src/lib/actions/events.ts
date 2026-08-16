@@ -2,7 +2,6 @@
 
 import { BookingStatus, EventStatus, SeatStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 
 import { getAdminSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -99,6 +98,7 @@ async function createEventWithSeats(params: {
 export type EventActionState = {
   ok: boolean;
   error?: string;
+  eventSlug?: string;
 };
 
 function formValue(formData: FormData, name: string) {
@@ -205,18 +205,18 @@ export async function createEventAction(
     return { ok: false, error: 'Event time must be tomorrow or later.' };
   }
 
+  const venue = await prisma.venue.findUnique({
+    where: { id: venueId },
+    select: { id: true },
+  });
+  if (!venue) {
+    return { ok: false, error: 'Venue not found.' };
+  }
+
+  const baseSlug = slugify(name);
+  let slug = await resolveUniqueSlug(baseSlug);
+
   try {
-    const venue = await prisma.venue.findUnique({
-      where: { id: venueId },
-      select: { id: true },
-    });
-    if (!venue) {
-      return { ok: false, error: 'Venue not found.' };
-    }
-
-    const baseSlug = slugify(name);
-    let slug = await resolveUniqueSlug(baseSlug);
-
     try {
       await createEventWithSeats({ venueId, name, startsAt: startsAtDate, slug });
     } catch (error) {
@@ -234,7 +234,7 @@ export async function createEventAction(
     return { ok: false, error: 'Something went wrong creating the event.' };
   }
 
-  redirect('/admin/events');
+  return { ok: true, eventSlug: slug };
 }
 
 export async function publishEventAction(formData: FormData): Promise<EventActionState> {

@@ -1,6 +1,7 @@
 import { EventStatus } from '@prisma/client';
 import Link from 'next/link';
 
+import { ScrollToTop } from '@/components/scroll-to-top';
 import { formatPrice } from '@/lib/currency';
 import { getEventsWithStats, type EventWithStats } from '@/lib/events';
 import { formatDate } from '@/lib/format';
@@ -161,6 +162,8 @@ export default async function AdminEventsPage() {
           )}
         </EventSection>
       ))}
+
+      <ScrollToTop />
     </div>
   );
 }
