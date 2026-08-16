@@ -2,7 +2,7 @@
 
 import { SeatStatus } from '@prisma/client';
 import Link from 'next/link';
-import { useActionState, useEffect, useMemo, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 
 import {
   requestSeatStateAction,

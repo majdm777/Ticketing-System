@@ -117,19 +117,15 @@ export function VenueBuilder({
   );
   const [result, setResult] = useState<VenueActionState>({ ok: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createSuccess, setCreateSuccess] = useState(false);
-
   const router = useRouter();
 
   const isEditing = Boolean(venueId);
 
+  const createSuccess = !isEditing && result.ok && Boolean(result.venueId);
+
   useEffect(() => {
-    if (result.ok && result.venueId) {
-      if (!isEditing) {
-        setCreateSuccess(true);
-      } else {
-        router.push('/admin/venues');
-      }
+    if (isEditing && result.ok && result.venueId) {
+      router.push('/admin/venues');
     }
   }, [result, router, isEditing]);
 
