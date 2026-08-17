@@ -24,6 +24,8 @@ export function ScrollToTop({ threshold = 300 }: { threshold?: number }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setVisible(window.scrollY > threshold);
+
     function onScroll() {
       if (timerRef.current !== null) {
         return;
@@ -39,6 +41,7 @@ export function ScrollToTop({ threshold = 300 }: { threshold?: number }) {
       window.removeEventListener('scroll', onScroll);
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, [threshold]);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 
 import { ConfirmationDialog } from '@/components/confirmation-dialog';
 import {
@@ -22,6 +22,7 @@ export function PendingRequestActions({ bookingId }: { bookingId: string }) {
   );
   const error = confirmState.error ?? cancelState.error;
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [isTransitionPending, startTransition] = useTransition();
 
   return (
     <div className="space-y-2">
@@ -52,9 +53,11 @@ export function PendingRequestActions({ bookingId }: { bookingId: string }) {
         confirmLabel="Cancel request"
         onConfirm={() => {
           setConfirmCancelOpen(false);
-          const form = new FormData();
-          form.set('bookingId', bookingId);
-          cancelAction(form);
+          startTransition(() => {
+            const form = new FormData();
+            form.set('bookingId', bookingId);
+            cancelAction(form);
+          });
         }}
         onCancel={() => setConfirmCancelOpen(false)}
       />

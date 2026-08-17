@@ -656,7 +656,7 @@ export function VenueBuilder({
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={isSubmitting}
+        disabled={isSubmitting || createSuccess}
         className="bg-black text-white px-6 py-2 rounded-md font-medium hover:bg-gray-800 disabled:opacity-50"
       >
         {isSubmitting

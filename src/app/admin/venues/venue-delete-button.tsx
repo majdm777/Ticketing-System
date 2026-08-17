@@ -27,7 +27,7 @@ export function VenueDeleteButton({ venueId, venueName }: { venueId: string; ven
         type="button"
         onClick={() => setOpen(true)}
         disabled={isPending}
-        className="inline-block border border-gray-300 px-4 py-2 rounded-md font-medium text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+        className="inline-flex min-h-11 items-center border border-gray-300 px-4 py-2 rounded-md font-medium text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
       >
         {isPending ? 'Deleting...' : 'Delete'}
       </button>

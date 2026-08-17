@@ -205,18 +205,20 @@ export async function createEventAction(
     return { ok: false, error: 'Event time must be tomorrow or later.' };
   }
 
-  const venue = await prisma.venue.findUnique({
-    where: { id: venueId },
-    select: { id: true },
-  });
-  if (!venue) {
-    return { ok: false, error: 'Venue not found.' };
-  }
-
   const baseSlug = slugify(name);
-  let slug = await resolveUniqueSlug(baseSlug);
+  let slug: string;
 
   try {
+    const venue = await prisma.venue.findUnique({
+      where: { id: venueId },
+      select: { id: true },
+    });
+    if (!venue) {
+      return { ok: false, error: 'Venue not found.' };
+    }
+
+    slug = await resolveUniqueSlug(baseSlug);
+
     try {
       await createEventWithSeats({ venueId, name, startsAt: startsAtDate, slug });
     } catch (error) {

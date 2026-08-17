@@ -41,6 +41,7 @@ export function ConfirmationDialog({
   return (
     <dialog
       ref={dialogRef}
+      aria-label={title}
       onClose={onClose}
       className="fixed inset-0 z-50 m-auto w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-0 shadow-lg backdrop:bg-zinc-950/40 open:flex open:flex-col"
     >

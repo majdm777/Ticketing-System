@@ -21,13 +21,13 @@ function CheckIcon({ className }: { className: string }) {
   );
 }
 
-function CopyIcon() {
+function CopyIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 20 20"
       fill="none"
       aria-hidden="true"
-      className="h-4 w-4"
+      className={className ?? 'h-4 w-4'}
     >
       <rect
         x="6.5"
@@ -95,14 +95,14 @@ export function CopyCodeButton({
       <button
         type="button"
         onClick={copy}
-        aria-label={copied ? 'Copied' : 'Copy code'}
+        aria-label={copied ? 'Copied' : failed ? 'Copy failed' : 'Copy code'}
         aria-live="polite"
         className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
       >
         {copied ? (
           <CheckIcon className="h-4 w-4 text-emerald-600" />
         ) : (
-          <CopyIcon />
+          <CopyIcon className={failed ? 'text-red-600' : undefined} />
         )}
       </button>
     );
