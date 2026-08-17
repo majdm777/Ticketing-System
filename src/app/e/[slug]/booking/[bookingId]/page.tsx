@@ -2,6 +2,7 @@ import { BookingStatus, CaseType, EventStatus } from '@prisma/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { CopyCodeButton } from '@/components/copy-code-button';
 import { formatUsd } from '@/lib/currency';
 import { formatDate } from '@/lib/format';
 import { getPublicBooking, type PublicBooking } from '@/lib/public-bookings';
@@ -33,9 +34,12 @@ function StatusCard({
               Pay the organizer {formatUsd(booking.seat.price ?? 0)} and use
               this code as your payment note:
             </p>
-            <p className="mt-2 font-mono text-3xl font-bold tracking-widest text-white">
-              {booking.referenceCode}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+              <p className="font-mono text-3xl font-bold tracking-widest text-white">
+                {booking.referenceCode}
+              </p>
+              <CopyCodeButton value={booking.referenceCode} compact />
+            </div>
           </div>
         ) : (
           <p className="mt-4 text-base leading-6 text-zinc-700">

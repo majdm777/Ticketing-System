@@ -1,6 +1,7 @@
 import { BookingStatus, EventStatus, SeatStatus } from '@prisma/client';
 import Link from 'next/link';
 
+import { ScrollToTop } from '@/components/scroll-to-top';
 import { requestGroupKey, seatLabel } from '@/lib/booking-groups';
 import { formatPrice, formatUsd } from '@/lib/currency';
 import { countBookableSeats, getDashboardStats } from '@/lib/events';
@@ -277,6 +278,8 @@ export default async function AdminDashboardPage() {
           </section>
         </>
       )}
+
+      <ScrollToTop />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   type SeatMapLegendItem,
   type SeatMapRow,
 } from '@/components/seat-map';
+import { ScrollToTop } from '@/components/scroll-to-top';
 import { requestGroupKey, seatLabel } from '@/lib/booking-groups';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
@@ -257,31 +258,33 @@ export default async function AdminBookingsPage({
 
       {event ? (
         <>
-          <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-0.5">
-                <h2 className="font-semibold tracking-tight">{event.name}</h2>
-                <p className="text-sm leading-6 text-zinc-600">
-                  {event.venue.name} · {formatDate(event.startsAt)}
-                </p>
+          <div className="sticky top-0 z-10 -mx-4 bg-zinc-100 px-4 pb-4 pt-1 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-0.5">
+                  <h2 className="font-semibold tracking-tight">{event.name}</h2>
+                  <p className="text-sm leading-6 text-zinc-600">
+                    {event.venue.name} · {formatDate(event.startsAt)}
+                  </p>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:pb-0">
+                  {statusOptions.map((status) => (
+                    <Link
+                      key={status}
+                      href={`/admin/bookings?eventId=${event.id}&status=${status}`}
+                      className={`inline-flex h-11 items-center whitespace-nowrap rounded-md border px-3 text-sm ${
+                        selectedStatus === status
+                          ? 'border-zinc-950 bg-zinc-950 text-white'
+                          : 'border-zinc-200 text-zinc-600 hover:text-zinc-950'
+                      }`}
+                    >
+                      {status === 'all' ? 'All' : status}
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:pb-0">
-                {statusOptions.map((status) => (
-                  <Link
-                    key={status}
-                    href={`/admin/bookings?eventId=${event.id}&status=${status}`}
-                    className={`inline-flex h-11 items-center whitespace-nowrap rounded-md border px-3 text-sm ${
-                      selectedStatus === status
-                        ? 'border-zinc-950 bg-zinc-950 text-white'
-                        : 'border-zinc-200 text-zinc-600 hover:text-zinc-950'
-                    }`}
-                  >
-                    {status === 'all' ? 'All' : status}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </section>
+            </section>
+          </div>
 
           <div
             className={`space-y-3 md:hidden ${
@@ -353,6 +356,8 @@ export default async function AdminBookingsPage({
           Pick an event to review its bookings.
         </p>
       )}
+
+      <ScrollToTop />
     </div>
   );
 }

@@ -117,16 +117,17 @@ export function VenueBuilder({
   );
   const [result, setResult] = useState<VenueActionState>({ ok: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const router = useRouter();
 
   const isEditing = Boolean(venueId);
 
+  const createSuccess = !isEditing && result.ok && Boolean(result.venueId);
+
   useEffect(() => {
-    if (result.ok && result.venueId) {
+    if (isEditing && result.ok && result.venueId) {
       router.push('/admin/venues');
     }
-  }, [result, router]);
+  }, [result, router, isEditing]);
 
   function addRow() {
     const id = `row-${rowIdCounterRef.current + 1}`;
@@ -632,10 +633,30 @@ export function VenueBuilder({
         </div>
       )}
 
+      {createSuccess && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 mb-4">
+          <p className="text-sm font-medium text-emerald-800">Venue created successfully.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <a
+              href="/admin/venues"
+              className="inline-flex h-11 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white sm:w-auto"
+            >
+              View venues
+            </a>
+            <a
+              href="/admin/events/new"
+              className="inline-flex h-11 items-center justify-center rounded-md border border-zinc-300 px-4 text-sm font-medium text-zinc-700 sm:w-auto"
+            >
+              Create an event
+            </a>
+          </div>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={isSubmitting}
+        disabled={isSubmitting || createSuccess}
         className="bg-black text-white px-6 py-2 rounded-md font-medium hover:bg-gray-800 disabled:opacity-50"
       >
         {isSubmitting
