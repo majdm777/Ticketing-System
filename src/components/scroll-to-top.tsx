@@ -24,7 +24,9 @@ export function ScrollToTop({ threshold = 300 }: { threshold?: number }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setVisible(window.scrollY > threshold);
+    const rafId = requestAnimationFrame(() => {
+      setVisible(window.scrollY > threshold);
+    });
 
     function onScroll() {
       if (timerRef.current !== null) {
@@ -38,6 +40,7 @@ export function ScrollToTop({ threshold = 300 }: { threshold?: number }) {
 
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
+      cancelAnimationFrame(rafId);
       window.removeEventListener('scroll', onScroll);
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);

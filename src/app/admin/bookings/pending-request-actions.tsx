@@ -22,7 +22,7 @@ export function PendingRequestActions({ bookingId }: { bookingId: string }) {
   );
   const error = confirmState.error ?? cancelState.error;
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
-  const [isTransitionPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   return (
     <div className="space-y-2">
