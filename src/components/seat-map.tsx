@@ -224,7 +224,7 @@ export function SeatMap({
   const numberFontSize = Math.max(9, Math.round(seatSize * 0.38));
 
   return (
-    <div ref={containerRef} dir="ltr" className="space-y-4">
+    <div ref={containerRef} className="space-y-4">
       <div className="flex w-full max-w-full flex-col items-center gap-2">
         {stageLabel ? (
           <div className="mb-4 w-full text-center text-xs font-semibold uppercase tracking-[0.3em] text-zinc-600">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { buildSectionColorMap } from '@/lib/section-colors';
@@ -637,18 +638,18 @@ export function VenueBuilder({
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 mb-4">
           <p className="text-sm font-medium text-emerald-800">Venue created successfully.</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <a
+            <Link
               href="/admin/venues"
               className="inline-flex h-11 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white sm:w-auto"
             >
               View venues
-            </a>
-            <a
+            </Link>
+            <Link
               href="/admin/events/new"
               className="inline-flex h-11 items-center justify-center rounded-md border border-zinc-300 px-4 text-sm font-medium text-zinc-700 sm:w-auto"
             >
               Create an event
-            </a>
+            </Link>
           </div>
         </div>
       )}
