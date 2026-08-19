@@ -1,0 +1,77 @@
+{
+  "Event": {
+    "canceled": "This event was canceled",
+    "ended": "This event has ended",
+    "canceledDescription": "You can no longer request seats for this event.",
+    "endedDescription": "Seats are no longer available for this event."
+  },
+  "Booking": {
+    "chooseSeats": "Choose your seats",
+    "chooseSeatsDescription": "Tap one or more available seats — up to {max}. They're reserved together and paid with a single code.",
+    "seatLimitReached": "Seat limit reached — tap a selected seat to drop it before picking another.",
+    "requestSeats": "Request these seats",
+    "seatsSelected": "{count, plural, one {# seat selected} other {# seats selected}}",
+    "yourSeats": "Your seats",
+    "howWillYouPay": "How will you pay?",
+    "payOnline": "Pay online with a code",
+    "payOnlineDescription": "We'll give you one code for all {count, plural, one {# seat} other {# seats}}. Pay the organizer online and use the code as your payment note.",
+    "payAtDoor": "Pay at the door",
+    "payAtDoorDescription": "No payment needed now.",
+    "yourName": "Your name",
+    "total": "Total",
+    "requestButton": "Request {count, plural, one {# seat} other {# seats}}",
+    "requesting": "Requesting…",
+    "seatsHeldOnline": "Your seats are being held",
+    "seatsHeldDoor": "We are holding your seats",
+    "payOrganizer": "Pay the organizer {amount} and use this code as your payment note:",
+    "payAtDoorMessage": "We are holding your seats for you. Pay {amount} at the door when you arrive.",
+    "checkBooking": "Check booking",
+    "seatSummary": "{section} · row {row} seat {number}"
+  },
+  "Status": {
+    "bookingStatus": "Booking status",
+    "waitingPayment": "Waiting for your payment",
+    "waitingPaymentDescription": "Once your payment is confirmed, refresh this page to see the update.",
+    "waitingForPayment": "We are waiting for your payment.",
+    "seatBeingHeld": "Your seat is being held",
+    "seatBeingHeldDescription": "We are holding your seat for you. Pay at the door when you arrive.",
+    "seatConfirmed": "Your seat is confirmed",
+    "seeYou": "See you at the event!",
+    "holdExpired": "This hold has expired",
+    "bookingCancelled": "This booking was cancelled",
+    "seatNoLongerHeld": "Your seat is no longer held for you.",
+    "requestAgain": "Request your seat again",
+    "backToEvent": "Back to the event page",
+    "yourBooking": "Your booking",
+    "seat": "Seat",
+    "price": "Price",
+    "date": "Date",
+    "venue": "Venue",
+    "seatDetails": "{section} · row {row}, seat {number}",
+    "seatDetailsNoSection": "row {row}, seat {number}"
+  },
+  "SeatMap": {
+    "stage": "STAGE",
+    "taken": "Taken",
+    "seatAriaLabel": "{section} section, row {row}, seat {number}",
+    "seatAriaLabelTaken": "{section} section, row {row}, seat {number}, taken"
+  },
+  "Phone": {
+    "yourPhone": "Your phone number",
+    "invalidPhone": "Enter a valid {country} phone number.",
+    "countryPickerLabel": "Country code"
+  },
+  "Copy": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyCode": "Copy code",
+    "copyFailed": "Copy failed",
+    "copyFailedHint": "Copy failed — press and hold the code to copy it manually.",
+    "copyPaymentCode": "Copy payment reference code"
+  },
+  "Common": {
+    "scrollBackToTop": "Scroll back to top",
+    "en": "EN",
+    "ar": "AR"
+  }
+}
