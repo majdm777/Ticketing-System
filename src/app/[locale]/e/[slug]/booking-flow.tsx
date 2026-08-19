@@ -341,7 +341,7 @@ export function BookingFlow({
               defaultCountryCode={defaultCountryCode}
               label={tPhone('yourPhone')}
               placeholder={tPhone('yourPhone')}
-              phoneErrorTemplate={tPhone('invalidPhone')}
+              phoneErrorTemplate={(country) => tPhone('invalidPhone', { country })}
               countryPickerLabel={tPhone('countryPickerLabel')}
             />
           </div>

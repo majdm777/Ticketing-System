@@ -23,7 +23,7 @@
     "requesting": "جارٍ الطلب…",
     "seatsHeldOnline": "مقاعدك محجوزة",
     "seatsHeldDoor": "نحتفظ بمقاعدك",
-    "payOrganizer": "ادفع لل Organizer {amount} واستخدم هذا الرمز كملاحظة الدفع:",
+    "payOrganizer": "ادفع للمنظّم {amount} واستخدم هذا الرمز كملاحظة الدفع:",
     "payAtDoorMessage": "نحتفظ بمقاعدك لك. ادفع {amount} عند الباب عند وصولك.",
     "checkBooking": "تحقق من الحجز",
     "seatSummary": "{section} · صف {row} مقعد {number}"

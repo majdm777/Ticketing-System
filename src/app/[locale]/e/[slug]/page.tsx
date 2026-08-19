@@ -31,8 +31,8 @@ export default async function PublicEventPage({
     return (
       <main className="w-full flex-1">
         <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-          <header className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-2">
               <h1 className="text-2xl font-bold leading-tight sm:text-3xl">
                 {event.name}
               </h1>
@@ -76,8 +76,8 @@ export default async function PublicEventPage({
   return (
     <main className="w-full flex-1">
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-        <header className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
             <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{event.name}</h1>
             <p className="text-base text-zinc-600">
               {formatDate(event.startsAt, locale)}

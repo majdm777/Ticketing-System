@@ -60,7 +60,7 @@ export function PhoneInput({
   defaultCountryCode: string;
   label?: string;
   placeholder?: string;
-  phoneErrorTemplate?: string;
+  phoneErrorTemplate?: (country: string) => string;
   countryPickerLabel?: string;
 }) {
   const [countryCode, setCountryCode] = useState(() =>
@@ -87,7 +87,7 @@ export function PhoneInput({
   const fullNumber = `+${country.dial}${nationalDigits}`;
   const phoneError =
     nationalNumber.trim() !== '' && !isPhoneValid(fullNumber, country.code)
-      ? (phoneErrorTemplate?.replace('{country}', country.name) ?? `Enter a valid ${country.name} phone number.`)
+      ? (phoneErrorTemplate?.(country.name) ?? `Enter a valid ${country.name} phone number.`)
       : null;
 
   // Reflect the computed phone error into native constraint validation so the
