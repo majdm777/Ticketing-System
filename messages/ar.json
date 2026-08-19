@@ -1,0 +1,77 @@
+{
+  "Event": {
+    "canceled": "تم إلغاء هذا الحدث",
+    "ended": "انتهى هذا الحدث",
+    "canceledDescription": "لم يعد بإمكانك طلب مقاعد لهذا الحدث.",
+    "endedDescription": "لم تعد المقاعد متاحة لهذا الحدث."
+  },
+  "Booking": {
+    "chooseSeats": "اختر مقاعدك",
+    "chooseSeatsDescription": "اضغط على مقعد واحد أو أكثر — حتى {max}. يتم حجزها معاً ودفعها برمز واحد.",
+    "seatLimitReached": "تم الوصول للحد الأقصى — اضغط على مقعد محدد لإلغائه قبل اختيار آخر.",
+    "requestSeats": "اطلب هذه المقاعد",
+    "seatsSelected": "{count, plural, zero {لم يتم اختيار مقعد} one {تم اختيار مقعد واحد} two {تم اختيار مقعدين} few {تم اختيار # مقاعد} many {تم اختيار # مقعداً} other {تم اختيار # مقعد}}",
+    "yourSeats": "مقاعدك",
+    "howWillYouPay": "كيف ستقوم بالدفع؟",
+    "payOnline": "ادفع أونلاين برمز",
+    "payOnlineDescription": "سنوفر لك رمزاً واحداً لجميع {count, plural, one {المقعد} other {# مقاعد}}. ادفع للمنظم أونلاين واستخدم الرمز كملاحظة الدفع.",
+    "payAtDoor": "ادفع عند الباب",
+    "payAtDoorDescription": "لا حاجة للدفع الآن.",
+    "yourName": "اسمك",
+    "total": "المجموع",
+    "requestButton": "اطلب {count, plural, one {مقعد} other {# مقاعد}}",
+    "requesting": "جارٍ الطلب…",
+    "seatsHeldOnline": "مقاعدك محجوزة",
+    "seatsHeldDoor": "نحتفظ بمقاعدك",
+    "payOrganizer": "ادفع للمنظّم {amount} واستخدم هذا الرمز كملاحظة الدفع:",
+    "payAtDoorMessage": "نحتفظ بمقاعدك لك. ادفع {amount} عند الباب عند وصولك.",
+    "checkBooking": "تحقق من الحجز",
+    "seatSummary": "{section} · صف {row} مقعد {number}"
+  },
+  "Status": {
+    "bookingStatus": "حالة الحجز",
+    "waitingPayment": "في انتظار الدفع",
+    "waitingPaymentDescription": "بمجرد تأكيد الدفع، قم بتحديث هذه الصفحة لرؤية التحديث.",
+    "waitingForPayment": "في انتظار الدفع.",
+    "seatBeingHeld": "مقعدك محجوز",
+    "seatBeingHeldDescription": "نحتفظ بمقعدك لك. ادفع عند الباب عند وصولك.",
+    "seatConfirmed": "تم تأكيد مقعدك",
+    "seeYou": "نراك في الحدث!",
+    "holdExpired": "انتهت صلاحية الحجز",
+    "bookingCancelled": "تم إلغاء هذا الحجز",
+    "seatNoLongerHeld": "لم يعد مقعدك محجوزاً لك.",
+    "requestAgain": "أعد طلب مقعدك",
+    "backToEvent": "العودة إلى صفحة الحدث",
+    "yourBooking": "حجزك",
+    "seat": "المقعد",
+    "price": "السعر",
+    "date": "التاريخ",
+    "venue": "المكان",
+    "seatDetails": "{section} · صف {row}، مقعد {number}",
+    "seatDetailsNoSection": "صف {row}، مقعد {number}"
+  },
+  "SeatMap": {
+    "stage": "المسرح",
+    "taken": "محجوز",
+    "seatAriaLabel": "قسم {section}، صف {row}، مقعد {number}",
+    "seatAriaLabelTaken": "قسم {section}، صف {row}، مقعد {number}، محجوز"
+  },
+  "Phone": {
+    "yourPhone": "رقم هاتفك",
+    "invalidPhone": "أدخل رقم هاتف {country} صالح.",
+    "countryPickerLabel": "رمز الدولة"
+  },
+  "Copy": {
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "copyCode": "نسخ الرمز",
+    "copyFailed": "فشل النسخ",
+    "copyFailedHint": "فشل النسخ — اضغط مع الاستمرار على الرمز لنسخه يدوياً.",
+    "copyPaymentCode": "نسخ رمز الدفع"
+  },
+  "Common": {
+    "scrollBackToTop": "العودة للأعلى",
+    "en": "EN",
+    "ar": "AR"
+  }
+}

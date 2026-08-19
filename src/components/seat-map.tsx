@@ -154,6 +154,7 @@ export function SeatMap({
   gapEditable = false,
   readOnly = false,
   seatLayout = 'ODD_EVEN',
+  locale = 'en',
 }: {
   rows: SeatMapRow[];
   legend?: SeatMapLegendItem[];
@@ -161,6 +162,7 @@ export function SeatMap({
   gapEditable?: boolean;
   readOnly?: boolean;
   seatLayout?: SeatLayout;
+  locale?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(0);
@@ -232,7 +234,7 @@ export function SeatMap({
         {rowsWithSplits.map(({ row, split, order }) => {
           return (
             <div key={row.label} className="flex items-center gap-2">
-              <span className="w-8 shrink-0 text-right text-xs text-zinc-600">
+              <span className="w-8 shrink-0 text-end text-xs text-zinc-600">
                 {row.label}
               </span>
               <div className="flex items-center" style={{ gap: seatGap }}>
@@ -307,7 +309,7 @@ export function SeatMap({
               />
               {item.name}
               {item.price != null ? (
-                <span className="text-zinc-600">· {formatPrice(item.price)}</span>
+                <span className="text-zinc-600">· {formatPrice(item.price, locale)}</span>
               ) : null}
             </div>
           ))}
