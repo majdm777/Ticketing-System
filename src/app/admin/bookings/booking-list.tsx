@@ -23,6 +23,7 @@ export function BookingList({ requestGroups, showScroll }: Props) {
         <div className="relative">
           <input
             type="search"
+            aria-label="Search bookings by attendee name"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name"
@@ -33,7 +34,7 @@ export function BookingList({ requestGroups, showScroll }: Props) {
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded px-2 text-xs text-zinc-500 hover:text-zinc-950"
+              className="absolute right-2 top-1/2 inline-flex h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded px-2 text-xs text-zinc-500 hover:text-zinc-950"
             >
               Clear
             </button>
@@ -58,8 +59,8 @@ export function BookingList({ requestGroups, showScroll }: Props) {
       </div>
 
       <div
-        className={`hidden rounded-lg border border-zinc-200 bg-white md:block ${
-          showScroll ? 'max-h-[560px] overflow-y-auto' : 'overflow-hidden'
+        className={`hidden overflow-x-auto rounded-lg border border-zinc-200 bg-white md:block ${
+          showScroll ? 'max-h-[560px] overflow-y-auto' : ''
         }`}
       >
         <table className="w-full min-w-225 text-left text-sm">
