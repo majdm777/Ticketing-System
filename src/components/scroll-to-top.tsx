@@ -19,7 +19,7 @@ function ArrowUpIcon() {
   );
 }
 
-export function ScrollToTop({ threshold = 300, ariaLabel = 'Scroll back to top' }: { threshold?: number; ariaLabel?: string }) {
+export function ScrollToTop({ threshold = 300 }: { threshold?: number }) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -57,8 +57,8 @@ export function ScrollToTop({ threshold = 300, ariaLabel = 'Scroll back to top' 
     <button
       type="button"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      aria-label={ariaLabel}
-      className="fixed bottom-6 end-6 z-40 grid h-12 w-12 place-items-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-lg transition-colors hover:bg-zinc-50 sm:bottom-8 sm:end-8"
+      aria-label="Scroll back to top"
+      className="fixed bottom-6 right-6 z-40 grid h-12 w-12 place-items-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-lg transition-colors hover:bg-zinc-50 sm:bottom-8 sm:right-8"
     >
       <ArrowUpIcon />
     </button>

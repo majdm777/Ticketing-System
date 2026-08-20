@@ -8,20 +8,24 @@ export function lbpToUsd(lbp: number): number {
   return lbp / USD_TO_LBP;
 }
 
-export function formatUsd(usd: number, locale = 'en-US'): string {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(usd);
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+const lbpFormatter = new Intl.NumberFormat('en-US');
+
+export function formatUsd(usd: number): string {
+  return usdFormatter.format(usd);
 }
 
-export function formatLbp(lbp: number, locale = 'en-US'): string {
-  return new Intl.NumberFormat(locale).format(lbp);
+export function formatLbp(lbp: number): string {
+  return lbpFormatter.format(lbp);
 }
 
 // "X / Y LBP" — the whole-dollar price followed by its LBP equivalent.
-export function formatPrice(usd: number, locale = 'en-US'): string {
-  return `${formatUsd(usd, locale)} / ${formatLbp(usdToLbp(usd), locale)} LBP`;
+export function formatPrice(usd: number): string {
+  return `${formatUsd(usd)} / ${formatLbp(usdToLbp(usd))} LBP`;
 }

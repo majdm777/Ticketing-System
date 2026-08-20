@@ -1,9 +1,27 @@
-import createMiddleware from 'next-intl/middleware';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-import { routing } from './i18n/routing';
+import { readSessionFromRequestCookies } from '@/lib/admin-session';
 
-export default createMiddleware(routing);
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname === '/admin/login') {
+    if (readSessionFromRequestCookies(request.cookies)) {
+      return NextResponse.redirect(new URL('/admin', request.url));
+    }
+
+    return NextResponse.next();
+  }
+
+  if (!readSessionFromRequestCookies(request.cookies)) {
+    const loginUrl = new URL('/admin/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
 
 export const config = {
-  matcher: ['/((?!api|trpc|_next|_vercel|admin|.*\\..*).*)'],
+  matcher: '/admin/:path*',
 };

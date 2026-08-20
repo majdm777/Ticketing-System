@@ -50,19 +50,9 @@ function CopyIcon({ className }: { className?: string }) {
 export function CopyCodeButton({
   value,
   compact = false,
-  copiedLabel = 'Copied',
-  copyLabel = 'Copy',
-  failedLabel = 'Copy failed',
-  ariaLabel = 'Copy payment reference code',
-  failedMessage,
 }: {
   value: string;
   compact?: boolean;
-  copiedLabel?: string;
-  copyLabel?: string;
-  failedLabel?: string;
-  ariaLabel?: string;
-  failedMessage?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -105,7 +95,7 @@ export function CopyCodeButton({
       <button
         type="button"
         onClick={copy}
-        aria-label={copied ? copiedLabel : failed ? failedLabel : ariaLabel}
+        aria-label={copied ? 'Copied' : failed ? 'Copy failed' : 'Copy code'}
         aria-live="polite"
         className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
       >
@@ -123,7 +113,7 @@ export function CopyCodeButton({
       <button
         type="button"
         onClick={copy}
-        aria-label={ariaLabel}
+        aria-label="Copy payment reference code"
         aria-live="polite"
         className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border border-zinc-600 px-3 text-sm font-medium text-white transition-colors hover:border-zinc-400"
       >
@@ -132,11 +122,11 @@ export function CopyCodeButton({
         ) : (
           <CopyIcon />
         )}
-        {copied ? copiedLabel : copyLabel}
+        {copied ? 'Copied' : 'Copy'}
       </button>
-      {failed && failedMessage ? (
+      {failed ? (
         <p role="status" className="max-w-full text-sm text-zinc-300">
-          {failedMessage}
+          Copy failed — press and hold the code to copy it manually.
         </p>
       ) : null}
     </div>

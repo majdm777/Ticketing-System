@@ -54,14 +54,10 @@ export function PhoneInput({
   defaultCountryCode,
   label = 'Your phone number',
   placeholder = 'Your phone number',
-  phoneErrorTemplate,
-  countryPickerLabel = 'Country code',
 }: {
   defaultCountryCode: string;
   label?: string;
   placeholder?: string;
-  phoneErrorTemplate?: (country: string) => string;
-  countryPickerLabel?: string;
 }) {
   const [countryCode, setCountryCode] = useState(() =>
     getCountry(defaultCountryCode)
@@ -87,7 +83,7 @@ export function PhoneInput({
   const fullNumber = `+${country.dial}${nationalDigits}`;
   const phoneError =
     nationalNumber.trim() !== '' && !isPhoneValid(fullNumber, country.code)
-      ? (phoneErrorTemplate?.(country.name) ?? `Enter a valid ${country.name} phone number.`)
+      ? `Enter a valid ${country.name} phone number.`
       : null;
 
   // Reflect the computed phone error into native constraint validation so the
@@ -150,7 +146,7 @@ export function PhoneInput({
             aria-haspopup="listbox"
             aria-expanded={open}
             aria-controls={open ? listboxId : undefined}
-            className="flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-s-md px-3 text-base text-zinc-950 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-950"
+            className="flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-l-md px-3 text-base text-zinc-950 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-950"
           >
             <span aria-hidden="true">{flagEmoji(country.code)}</span>
             <span>+{country.dial}</span>
@@ -175,7 +171,7 @@ export function PhoneInput({
             onChange={(event) => setNationalNumber(event.target.value)}
             aria-invalid={phoneError ? true : undefined}
             aria-describedby={phoneError ? `${inputId}-error` : undefined}
-            className="min-w-0 flex-1 rounded-e-md border-0 bg-transparent py-3 ps-3 pe-3 text-base text-zinc-950 outline-none placeholder:text-zinc-400"
+            className="min-w-0 flex-1 rounded-r-md border-0 bg-transparent py-3 pl-3 pr-3 text-base text-zinc-950 outline-none placeholder:text-zinc-400"
           />
         </div>
 
@@ -185,8 +181,8 @@ export function PhoneInput({
           <ul
             id={listboxId}
             role="listbox"
-            aria-label={countryPickerLabel}
-            className="absolute start-0 end-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg"
+            aria-label="Country code"
+            className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg"
           >
             {COUNTRIES.map((option, index) => (
               <li key={option.code} role="presentation">
@@ -216,7 +212,7 @@ export function PhoneInput({
                       setOpen(false);
                     }
                   }}
-                  className={`flex w-full min-h-11 cursor-pointer items-center gap-3 px-3 text-start text-base text-zinc-950 outline-none focus-visible:bg-zinc-100 ${
+                  className={`flex w-full min-h-11 cursor-pointer items-center gap-3 px-3 text-left text-base text-zinc-950 outline-none focus-visible:bg-zinc-100 ${
                     option.code === countryCode ? 'bg-zinc-100' : ''
                   }`}
                 >
