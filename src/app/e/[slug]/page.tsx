@@ -1,4 +1,3 @@
-import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
 import { resolveDefaultCountryCode } from '@/lib/countries';
@@ -6,19 +5,14 @@ import { env } from '@/lib/env';
 import { formatDate } from '@/lib/format';
 import { getPublicEventBySlug } from '@/lib/public-events';
 
-import { LocaleSwitcher } from '@/components/locale-switcher';
-
 import { BookingFlow } from './booking-flow';
 
 export default async function PublicEventPage({
   params,
 }: {
-  params: Promise<{ slug: string; locale: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { slug, locale } = await params;
-  setRequestLocale(locale);
-
-  const t = await getTranslations('Event');
+  const { slug } = await params;
 
   const lookup = await getPublicEventBySlug(slug);
 
@@ -31,19 +25,16 @@ export default async function PublicEventPage({
     return (
       <main className="w-full flex-1">
         <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-2">
-              <h1 className="text-2xl font-bold leading-tight sm:text-3xl">
-                {event.name}
-              </h1>
-              <p className="text-base text-zinc-600">
-                {formatDate(event.startsAt, locale)}
-                <span aria-hidden="true"> · </span>
-                {event.venue.name}
-                {event.venue.address ? ` — ${event.venue.address}` : ''}
-              </p>
-            </div>
-            <LocaleSwitcher />
+          <header className="space-y-2">
+            <h1 className="text-2xl font-bold leading-tight sm:text-3xl">
+              {event.name}
+            </h1>
+            <p className="text-base text-zinc-600">
+              {formatDate(event.startsAt)}
+              <span aria-hidden="true"> · </span>
+              {event.venue.name}
+              {event.venue.address ? ` — ${event.venue.address}` : ''}
+            </p>
           </header>
 
           {event.description ? (
@@ -56,13 +47,13 @@ export default async function PublicEventPage({
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-6">
               <h2 className="text-lg font-semibold">
                 {event.endedReason === 'canceled'
-                  ? t('canceled')
-                  : t('ended')}
+                  ? 'This event was canceled'
+                  : 'This event has ended'}
               </h2>
               <p className="mt-1 text-sm text-zinc-600">
                 {event.endedReason === 'canceled'
-                  ? t('canceledDescription')
-                  : t('endedDescription')}
+                  ? 'You can no longer request seats for this event.'
+                  : 'Seats are no longer available for this event.'}
               </p>
             </div>
           </section>
@@ -76,17 +67,14 @@ export default async function PublicEventPage({
   return (
     <main className="w-full flex-1">
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-2">
-            <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{event.name}</h1>
-            <p className="text-base text-zinc-600">
-              {formatDate(event.startsAt, locale)}
-              <span aria-hidden="true"> · </span>
-              {event.venue.name}
-              {event.venue.address ? ` — ${event.venue.address}` : ''}
-            </p>
-          </div>
-          <LocaleSwitcher />
+        <header className="space-y-2">
+          <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{event.name}</h1>
+          <p className="text-base text-zinc-600">
+            {formatDate(event.startsAt)}
+            <span aria-hidden="true"> · </span>
+            {event.venue.name}
+            {event.venue.address ? ` — ${event.venue.address}` : ''}
+          </p>
         </header>
 
         {event.description ? (
@@ -96,6 +84,7 @@ export default async function PublicEventPage({
         ) : null}
 
         <section className="mt-8 space-y-4">
+          {/* keyed by event so the selection resets when navigating between events */}
           <BookingFlow
             key={event.id}
             slug={slug}
